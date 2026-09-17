@@ -1,0 +1,51 @@
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import DocumentTrackerView from "../../components/DocumentTrackerView";
+import ReviewActions from "../../components/ReviewActions";
+import { DocRow } from "../../lib/documentTracker";
+
+// A document is waiting on the RD once the ARD has reviewed it but the RD
+// hasn't approved it yet, and it hasn't already been returned, cancelled, or sent.
+function isAwaitingRd(doc: DocRow) {
+  if (!doc.date_reviewed) return false;
+  if (doc.date_approved_by_rd) return false;
+  const s = (doc.status || "").toLowerCase();
+  if (s.includes("cancel") || s.includes("return") || s.includes("sent")) return false;
+  return true;
+}
+
+export default function RdPage() {
+  return (
+    <DocumentTrackerView
+      title="Document Tracker"
+      eyebrow="Regional Development Council · Negros Island Region — RD Approval Queue"
+      queueFilter={isAwaitingRd}
+      statsMode="count"
+      emptyQueueMessage="Nothing waiting on your approval right now."
+      headerExtra={
+        <div className="mb-6">
+          {/* TEMPORARY DEV SWITCHER */}
+          <div className="flex items-center gap-4 p-3 bg-[#FBF0DC] border border-[#A6741B] inline-flex rounded">
+            <span className="text-xs font-bold text-[#A6741B] uppercase tracking-wider">Dev Switch:</span>
+            <Link href="/sec" className="text-sm font-medium text-[#2A4B7C] hover:underline">
+              Go to Secretariat View
+            </Link>
+            <Link href="/ard" className="text-sm font-medium text-[#2A4B7C] hover:underline">
+              Go to ARD View
+            </Link>
+          </div>
+        </div>
+      }
+      renderActions={(doc, refresh) => (
+        <ReviewActions
+          doc={doc}
+          approveField="date_approved_by_rd"
+          approveLabel="Approve"
+          onDone={refresh}
+        />
+      )}
+    />
+  );
+}
