@@ -452,8 +452,20 @@ function Th({ children, className = "" }: { children: React.ReactNode; className
   return <th className={`px-4 py-3 font-medium text-[#6B6A63] text-xs ${className}`}>{children}</th>;
 }
 
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3.5 ${className}`}>{children}</td>;
+function Td({ 
+  children, 
+  className = "", 
+  title 
+}: { 
+  children: React.ReactNode; 
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <td className={`px-4 py-3.5 ${className}`} title={title}>
+      {children}
+    </td>
+  );
 }
 
 function Divider() { return <div className="h-4 w-px bg-[#DDD7C8]" />; }
