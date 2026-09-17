@@ -123,7 +123,7 @@ export type Category = { id: number; name: string };
 
 export async function fetchCategories(): Promise<Category[]> {
   const { data, error } = await supabase
-    .from("categories") // <-- CHANGE THIS
+    .from("categories") 
     .select("*")
     .order("name", { ascending: true });
   if (error) {
@@ -134,12 +134,12 @@ export async function fetchCategories(): Promise<Category[]> {
 }
 
 export async function addCategory(name: string) {
-  const { error } = await supabase.from("categories").insert([{ name }]); // <-- CHANGE THIS
+  const { error } = await supabase.from("categories").insert([{ name }]); 
   return error;
 }
 
 export async function removeCategory(id: number) {
-  const { error } = await supabase.from("categories").delete().eq("id", id); // <-- CHANGE THIS
+  const { error } = await supabase.from("categories").delete().eq("id", id); 
   return error;
 }
 
@@ -182,4 +182,24 @@ export async function addDrafter(name: string) {
 export async function removeDrafter(id: number) {
   const { error } = await supabase.from("drafters").delete().eq("id", id);
   if (error) console.error("Error removing drafter:", error);
+}
+
+// ---------------------------------------------------------------------------
+// Status Settings
+// ---------------------------------------------------------------------------
+
+export async function fetchStatuses(): Promise<Category[]> {
+  const { data, error } = await supabase.from("statuses").select("*").order("name");
+  if (error) console.error("Error fetching statuses:", error);
+  return data || [];
+}
+
+export async function addStatus(name: string) {
+  const { error } = await supabase.from("statuses").insert([{ name }]);
+  if (error) console.error("Error adding status:", error);
+}
+
+export async function removeStatus(id: number) {
+  const { error } = await supabase.from("statuses").delete().eq("id", id);
+  if (error) console.error("Error removing status:", error);
 }

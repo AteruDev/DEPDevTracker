@@ -150,7 +150,7 @@ export default function DocumentTrackerView({
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState<"All" | StatusTone>("All");
+const [statusFilter, setStatusFilter] = useState<string>("All");
 
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -250,7 +250,7 @@ export default function DocumentTrackerView({
     const q = search.trim().toLowerCase();
     return documents.filter((d) => {
       if (categoryFilter !== "All" && d.category !== categoryFilter) return false;
-      if (statusFilter !== "All" && statusTone(d.status) !== statusFilter) return false;
+      if (statusFilter !== "All" && d.status !== statusFilter) return false;
       if (!q) return true;
       const haystack = [d.document_no, d.email_subject, d.recipients, d.drafted_by]
         .filter(Boolean)
@@ -340,11 +340,17 @@ export default function DocumentTrackerView({
             ))}
           </select>
 
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="bg-white border border-[#DDD7C8] py-2 px-3 text-sm focus:outline-none focus:border-[#2A4B7C]">
+          <select 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)} 
+            className="bg-white border border-[#DDD7C8] py-2 px-3 text-sm focus:outline-none focus:border-[#2A4B7C]"
+          >
             <option value="All">All statuses</option>
-            <option value="sent">Sent</option>
-            <option value="pending">In process</option>
-            <option value="cancelled">Cancelled</option>
+            {statusOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
 
           {hasActiveFilters && (
