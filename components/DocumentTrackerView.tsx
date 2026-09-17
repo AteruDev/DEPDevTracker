@@ -467,7 +467,6 @@ function Td({
     </td>
   );
 }
-
 function Divider() { return <div className="h-4 w-px bg-[#DDD7C8]" />; }
 
 function StatItem({ label, value, tone }: { label: string; value: number; tone?: StatusTone }) {
