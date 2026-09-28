@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import DocumentTrackerView from "../../components/DocumentTrackerView";
+import RequireRole from "../../components/auth/RequireRole";
 import {
   Category,
   DocRow,
@@ -117,16 +118,17 @@ export default function SecretariatPage() {
   const statusNames = statuses.length > 0 ? statuses.map((s) => s.name) : ["Drafted", "Pending Review", "Returned", "Sent", "Cancelled"];
 
   return (
-    <DocumentTrackerView
-      key={refreshKey}
-      title="Document Tracker"
-      eyebrow="Regional Development Council · Negros Island Region — Secretariat"
-      statsMode="full"
-      allowManage
-      categoryOptions={categoryNames}
-      sectorOptions={sectorNames}
-      drafterOptions={drafterNames}
-      statusOptions={statusNames}
+    <RequireRole allow={["secretariat"]}>
+      <DocumentTrackerView
+        key={refreshKey}
+        title="Document Tracker"
+        eyebrow="Regional Development Council · Negros Island Region — Secretariat"
+        statsMode="full"
+        allowManage
+        categoryOptions={categoryNames}
+        sectorOptions={sectorNames}
+        drafterOptions={drafterNames}
+        statusOptions={statusNames}
       emptyQueueMessage="No documents recorded yet. Add the first one to start the register."
       headerExtra={
         <div className="mb-6">
@@ -263,6 +265,7 @@ export default function SecretariatPage() {
           )}
         </div>
       }
-    />
+      />
+    </RequireRole>
   );
 }

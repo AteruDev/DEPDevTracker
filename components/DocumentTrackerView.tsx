@@ -245,7 +245,6 @@ export default function DocumentTrackerView({
   const stats = useMemo(() => {
     const byStage: Record<PipelineStage, number> = {
       cancelled: 0,
-      returned: 0,
       awaiting_review: 0,
       awaiting_rd_approval: 0,
       awaiting_signature: 0,
@@ -371,13 +370,6 @@ export default function DocumentTrackerView({
               onClick={() => setStageFilter((s) => (s === "transmitted" ? "all" : "transmitted"))}
             />
             <Divider />
-            <StatItem
-              label={PIPELINE_STAGE_LABEL.returned}
-              value={stats.returned}
-              tone="cancelled"
-              active={stageFilter === "returned"}
-              onClick={() => setStageFilter((s) => (s === "returned" ? "all" : "returned"))}
-            />
             <Divider />
             <StatItem
               label={PIPELINE_STAGE_LABEL.cancelled}

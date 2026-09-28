@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useRef } from "react";
+import { useRouter } from "next/navigation";
+import { signOut } from "../../lib/auth";
 
 export default function TrackerHeader({
   title,
@@ -18,11 +20,17 @@ export default function TrackerHeader({
   scanning?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file && onScanDocument) onScanDocument(file);
     e.target.value = ""; // allow re-selecting the same file later
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/login");
   }
 
   return (
@@ -45,37 +53,45 @@ export default function TrackerHeader({
             </div>
           </div>
 
-          {allowManage && (
-            <div className="flex items-center gap-3">
-              {onScanDocument && (
-                <>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.webp"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={scanning}
-                    className="text-sm font-medium py-2 px-5 rounded border border-[#0C2D5C] text-[#0C2D5C] hover:bg-[#EAF0F9] disabled:opacity-60 transition-all"
-                  >
-                    {scanning ? "Scanning…" : "📄 Scan Document"}
-                  </button>
-                </>
-              )}
-              <button
-                onClick={onNewDocument}
-                className="bg-[#0C2D5C] text-white text-sm font-medium py-2 px-5 rounded hover:bg-[#082044] shadow-sm transition-all"
-              >
-                + New Document
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {allowManage && (
+              <div className="flex items-center gap-3">
+                {onScanDocument && (
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={scanning}
+                      className="text-sm font-medium py-2 px-5 rounded border border-[#0C2D5C] text-[#0C2D5C] hover:bg-[#EAF0F9] disabled:opacity-60 transition-all"
+                    >
+                      {scanning ? "Scanning…" : "📄 Scan Document"}
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={onNewDocument}
+                  className="bg-[#0C2D5C] text-white text-sm font-medium py-2 px-5 rounded hover:bg-[#082044] shadow-sm transition-all"
+                >
+                  + New Document
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={handleSignOut}
+              className="text-sm text-[#6B6A63] hover:text-[#14213D] hover:underline"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

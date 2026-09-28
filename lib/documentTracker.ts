@@ -26,7 +26,7 @@ export type DocRow = {
   deleted_at: string | null;
 };
 
-export type StatusTone = "sent" | "cancelled" | "returned" | "pending" | "none";
+export type StatusTone = "sent" | "cancelled" | "pending" | "none";
 
 // ---------------------------------------------------------------------------
 // Formatting + status helpers
@@ -51,7 +51,6 @@ export function statusTone(status: string | null): StatusTone {
   if (!status || !status.trim()) return "none";
   const s = status.toLowerCase();
   if (s.includes("cancel")) return "cancelled";
-  if (s.includes("return") || s.includes("revision")) return "returned";
   if (s.includes("sent")) return "sent";
   return "pending";
 }
@@ -59,7 +58,6 @@ export function statusTone(status: string | null): StatusTone {
 export const STATUS_STYLES: Record<StatusTone, string> = {
   sent: "bg-[#E7EFE9] text-[#3C6E4A]",
   cancelled: "bg-[#F3E6E6] text-[#7A1219]",
-  returned: "bg-[#F3E6E6] text-[#7A1219]",
   pending: "bg-[#FBF0DC] text-[#A6741B]",
   none: "bg-[#EDECE6] text-[#6B6A63]",
 };
@@ -67,7 +65,6 @@ export const STATUS_STYLES: Record<StatusTone, string> = {
 export const STATUS_LABEL: Record<StatusTone, string> = {
   sent: "Sent",
   cancelled: "Cancelled",
-  returned: "Returned",
   pending: "In process",
   none: "No status",
 };
@@ -199,7 +196,6 @@ export function canUndoRdApproval(doc: DocRow): boolean {
 
 export type PipelineStage =
   | "cancelled"
-  | "returned"
   | "awaiting_review"
   | "awaiting_rd_approval"
   | "awaiting_signature"
@@ -210,7 +206,6 @@ export type PipelineStage =
 export function pipelineStage(doc: DocRow): PipelineStage {
   const tone = statusTone(doc.status);
   if (tone === "cancelled") return "cancelled";
-  if (tone === "returned") return "returned";
 
   if (doc.date_transmitted) return "transmitted";
   if (doc.date_approved) return "ready_to_transmit"; // finally approved — just needs to go out
@@ -222,7 +217,6 @@ export function pipelineStage(doc: DocRow): PipelineStage {
 
 export const PIPELINE_STAGE_LABEL: Record<PipelineStage, string> = {
   cancelled: "Cancelled",
-  returned: "Returned",
   awaiting_review: "Needs ARD Review",
   awaiting_rd_approval: "Needs RD Approval",
   awaiting_signature: "Needs Gov Signature",
