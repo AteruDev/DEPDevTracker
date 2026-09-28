@@ -14,21 +14,21 @@ export default function HomePage() {
         <div className="flex flex-col gap-4">
           <Link 
             href="/sec" 
-            className="w-full bg-[#2A4B7C] text-white text-center py-3 text-sm font-medium hover:bg-[#20395F] transition-colors"
+            className="w-full bg-[#174337] text-white text-center py-3 text-sm font-medium hover:bg-[#0F2D24] transition-colors"
           >
             Enter as Secretariat
           </Link>
           
           <Link 
             href="/ard" 
-            className="w-full bg-white border border-[#2A4B7C] text-[#2A4B7C] text-center py-3 text-sm font-medium hover:bg-[#F0F4F8] transition-colors"
+            className="w-full bg-white border border-[#174337] text-[#174337] text-center py-3 text-sm font-medium hover:bg-[#F0F4F8] transition-colors"
           >
             Enter as ARD
           </Link>
           
           <Link 
             href="/rd" 
-            className="w-full bg-white border border-[#2A4B7C] text-[#2A4B7C] text-center py-3 text-sm font-medium hover:bg-[#F0F4F8] transition-colors"
+            className="w-full bg-white border border-[#174337] text-[#174337] text-center py-3 text-sm font-medium hover:bg-[#F0F4F8] transition-colors"
           >
             Enter as RD
           </Link>

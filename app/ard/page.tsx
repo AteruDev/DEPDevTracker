@@ -4,16 +4,20 @@ import React from "react";
 import Link from "next/link";
 import DocumentTrackerView from "../../components/DocumentTrackerView";
 import ReviewActions from "../../components/ReviewActions";
-import { DocRow } from "../../lib/documentTracker";
+import { DocRow, canUndoArdReview } from "../../lib/documentTracker";
 
-// A document is waiting on the ARD once it's been drafted but not yet
-// reviewed, and it hasn't already been returned, cancelled, or sent.
-function isAwaitingArd(doc: DocRow) {
-  if (!doc.date_drafted) return false;
-  if (doc.date_reviewed) return false;
+// A document stays in the ARD queue while it's awaiting review, AND for a
+// few days after being reviewed in case the review needs to be undone.
+function isArdQueue(doc: DocRow) {
   const s = (doc.status || "").toLowerCase();
   if (s.includes("cancel") || s.includes("return") || s.includes("sent")) return false;
-  return true;
+
+  if (!doc.date_reviewed) {
+    // Not yet reviewed — awaiting action.
+    return !!doc.date_drafted;
+  }
+  // Already reviewed — only keep it visible while undo is still available.
+  return canUndoArdReview(doc);
 }
 
 export default function ArdPage() {
@@ -21,18 +25,18 @@ export default function ArdPage() {
     <DocumentTrackerView
       title="Document Tracker"
       eyebrow="Regional Development Council · Negros Island Region — ARD Review Queue"
-      queueFilter={isAwaitingArd}
+      queueFilter={isArdQueue}
       statsMode="count"
       emptyQueueMessage="Nothing waiting on your review right now."
             headerExtra={
         <div className="mb-6">
-          {/* TEMPORARY DEV SWITCHER */}
+          {/* View switcher (no login yet) */}
           <div className="flex items-center gap-4 p-3 bg-[#FBF0DC] border border-[#A6741B] inline-flex rounded">
-            <span className="text-xs font-bold text-[#A6741B] uppercase tracking-wider">Dev Switch:</span>
-            <Link href="/sec" className="text-sm font-medium text-[#2A4B7C] hover:underline">
+            <span className="text-xs font-bold text-[#A6741B] uppercase tracking-wider">Switch view:</span>
+            <Link href="/sec" className="text-sm font-medium text-[#0C2D5C] hover:underline">
               Go to Secretariat View
             </Link>
-            <Link href="/rd" className="text-sm font-medium text-[#2A4B7C] hover:underline">
+            <Link href="/rd" className="text-sm font-medium text-[#0C2D5C] hover:underline">
               Go to RD View
             </Link>
           </div>

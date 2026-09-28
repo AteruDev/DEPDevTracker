@@ -1,0 +1,193 @@
+"use client";
+
+import React, { useState } from "react";
+import {
+  DocRow,
+  formatDate,
+  buildTimeline,
+  staleSeverity,
+  STALE_LABEL,
+  daysSinceActivity,
+  updateDocument,
+} from "../../lib/documentTracker";
+
+export default function DocDetail({
+  doc,
+  renderActions,
+  onRefresh,
+  allowManage,
+  onEditDetails,
+  onArchive,
+}: {
+  doc: DocRow;
+  renderActions?: (doc: DocRow, refresh: () => void) => React.ReactNode;
+  onRefresh: () => void;
+  allowManage?: boolean;
+  onEditDetails?: (doc: DocRow) => void;
+  onArchive?: (doc: DocRow) => void;
+}) {
+  const timeline = buildTimeline(doc);
+  const severity = staleSeverity(doc);
+  const days = daysSinceActivity(doc);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [dates, setDates] = useState({
+    date_signed_by_gov: doc.date_signed_by_gov || "",
+    date_approved: doc.date_approved || "",
+    date_transmitted: doc.date_transmitted || "",
+  });
+
+  async function handleSaveDates() {
+    setSaving(true);
+    const patch = {
+      date_signed_by_gov: dates.date_signed_by_gov || null,
+      date_approved: dates.date_approved || null,
+      date_transmitted: dates.date_transmitted || null,
+    };
+    const error = await updateDocument(doc.id, patch, doc, "dates_edited");
+
+    setSaving(false);
+
+    if (!error) {
+      setIsEditing(false);
+      onRefresh();
+    } else {
+      alert("Error saving dates: " + error.message);
+    }
+  }
+
+  return (
+    <div className="grid md:grid-cols-[1.3fr_1fr] gap-8">
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-medium text-[#6B6A63]">Approval timeline</p>
+
+          {renderActions && renderActions(doc, onRefresh)}
+
+          {allowManage && !isEditing && (
+            <div className="flex gap-4">
+              <button
+                onClick={() => onEditDetails && onEditDetails(doc)}
+                className="text-xs font-medium text-[#0C2D5C] hover:underline"
+              >
+                Edit Details
+              </button>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="text-xs font-medium text-[#0C2D5C] hover:underline"
+              >
+                Edit Dates
+              </button>
+              {onArchive && (
+                <button
+                  onClick={() => onArchive(doc)}
+                  className="text-xs font-medium text-[#7A1219] hover:underline"
+                >
+                  Archive
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {severity !== "none" && (
+          <p className="text-xs text-[#A6741B] bg-[#FBF0DC] inline-block px-2 py-1 mb-3">
+            ⚠ {STALE_LABEL[severity]} — no activity in {days} day{days === 1 ? "" : "s"}.
+          </p>
+        )}
+
+        {isEditing ? (
+          <div className="bg-white p-4 border border-[#DDD7C8] space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <label className="block text-xs text-[#6B6A63]">
+                Signed (Gov)
+                <input
+                  type="date"
+                  value={dates.date_signed_by_gov}
+                  onChange={(e) => setDates({ ...dates, date_signed_by_gov: e.target.value })}
+                  className="mt-1 block w-full border border-[#DDD7C8] p-1.5 focus:outline-none focus:border-[#0C2D5C]"
+                />
+              </label>
+              <label className="block text-xs text-[#6B6A63]">
+                Approved
+                <input
+                  type="date"
+                  value={dates.date_approved}
+                  onChange={(e) => setDates({ ...dates, date_approved: e.target.value })}
+                  className="mt-1 block w-full border border-[#DDD7C8] p-1.5 focus:outline-none focus:border-[#0C2D5C]"
+                />
+              </label>
+              <label className="block text-xs text-[#6B6A63]">
+                Transmitted
+                <input
+                  type="date"
+                  value={dates.date_transmitted}
+                  onChange={(e) => setDates({ ...dates, date_transmitted: e.target.value })}
+                  className="mt-1 block w-full border border-[#DDD7C8] p-1.5 focus:outline-none focus:border-[#0C2D5C]"
+                />
+              </label>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => setIsEditing(false)} className="text-xs text-[#6B6A63] hover:underline">
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveDates}
+                disabled={saving}
+                className="bg-[#0C2D5C] text-white text-sm font-medium py-2 px-4 rounded hover:bg-[#082044] disabled:opacity-60 transition-colors"
+              >
+                {saving ? "Saving..." : "Save Dates"}
+              </button>
+            </div>
+          </div>
+        ) : timeline.length === 0 ? (
+          <p className="text-sm text-[#6B6A63]">No dates recorded yet.</p>
+        ) : (
+          <ol className="flex flex-wrap gap-x-6 gap-y-4">
+            {timeline.map((step, i) => (
+              <li key={step.label} className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#D4A339]" />
+                  <div>
+                    <p className="text-sm font-medium text-[#1B2A44]">{step.label}</p>
+                    <p className="text-xs text-[#6B6A63]">{formatDate(step.date)}</p>
+                  </div>
+                </div>
+                {i < timeline.length - 1 && (
+                  <span className="hidden md:inline-block w-6 h-px bg-[#DDD7C8] ml-4" />
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      <div className="space-y-3 text-sm">
+        <DetailRow label="Sector / Division" value={doc.sector_division} />
+        <DetailRow label="Drafted by" value={doc.drafted_by} />
+        <DetailRow label="Email address" value={doc.email_address} multiline />
+        <DetailRow label="Attachments" value={doc.attachments} />
+        <DetailRow label="Remarks" value={doc.remarks} multiline />
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  multiline = false,
+}: {
+  label: string;
+  value: string | null;
+  multiline?: boolean;
+}) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-xs text-[#6B6A63] mb-0.5">{label}</p>
+      <p className={`text-[#1B2A44] ${multiline ? "whitespace-pre-line" : ""}`}>{value}</p>
+    </div>
+  );
+}

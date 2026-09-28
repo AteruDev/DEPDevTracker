@@ -23,6 +23,7 @@ export type DocRow = {
   remarks: string | null;
   attachments: string | null;
   created_at: string | null;
+  deleted_at: string | null;
 };
 
 export type StatusTone = "sent" | "cancelled" | "returned" | "pending" | "none";
@@ -57,8 +58,8 @@ export function statusTone(status: string | null): StatusTone {
 
 export const STATUS_STYLES: Record<StatusTone, string> = {
   sent: "bg-[#E7EFE9] text-[#3C6E4A]",
-  cancelled: "bg-[#F3E6E6] text-[#8B3232]",
-  returned: "bg-[#F3E6E6] text-[#8B3232]",
+  cancelled: "bg-[#F3E6E6] text-[#7A1219]",
+  returned: "bg-[#F3E6E6] text-[#7A1219]",
   pending: "bg-[#FBF0DC] text-[#A6741B]",
   none: "bg-[#EDECE6] text-[#6B6A63]",
 };
@@ -71,8 +72,166 @@ export const STATUS_LABEL: Record<StatusTone, string> = {
   none: "No status",
 };
 
-export function buildTimeline(doc: DocRow) {
-  const steps: { label: string; date: string | null }[] = [
+// A document is "closed" once it's sent or cancelled — it doesn't need a
+// staleness warning even if nothing has happened in a while.
+export function isClosed(doc: DocRow): boolean {
+  if (doc.date_transmitted) return true; // out the door — nothing left to chase
+  const tone = statusTone(doc.status);
+  return tone === "sent" || tone === "cancelled";
+}
+
+// The most recent date recorded on the document, across every stage —
+// whichever happened last. Falls back to created_at if no stage dates exist.
+export function lastActivityDate(doc: DocRow): string | null {
+  const dates = [
+    doc.date_transmitted,
+    doc.date_approved,
+    doc.date_signed_by_gov,
+    doc.date_approved_by_rd,
+    doc.date_reviewed,
+    doc.date_drafted,
+  ].filter((d): d is string => !!d);
+
+  if (dates.length === 0) return doc.created_at ? doc.created_at.slice(0, 10) : null;
+  return dates.sort().reverse()[0];
+}
+
+// True calendar-day difference between a stored date and "today," independent
+// of what time of day it currently is. Using raw millisecond math here would
+// make the count drift depending on when in the day you check it.
+function calendarDaysSince(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  const then = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(then.getTime())) return null;
+
+  const now = new Date();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const thenMidnight = new Date(then.getFullYear(), then.getMonth(), then.getDate());
+
+  const diffMs = todayMidnight.getTime() - thenMidnight.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+export function daysSinceActivity(doc: DocRow): number | null {
+  const last = lastActivityDate(doc);
+  return calendarDaysSince(last);
+}
+
+export const STALE_THRESHOLD_DAYS = 5;
+
+export type StaleSeverity = "none" | "watch" | "warning" | "critical";
+
+// Tiers: 5-7 days = watch, 8-14 = warning, 15+ = critical.
+// Sent/cancelled documents never need attention regardless of age.
+export function staleSeverity(doc: DocRow): StaleSeverity {
+  if (isClosed(doc)) return "none";
+  const days = daysSinceActivity(doc);
+  if (days === null) return "none";
+  if (days >= 15) return "critical";
+  if (days >= 8) return "warning";
+  if (days >= STALE_THRESHOLD_DAYS) return "watch";
+  return "none";
+}
+
+export const STALE_STYLES: Record<StaleSeverity, string> = {
+  none: "",
+  watch: "bg-[#FBF0DC] text-[#A6741B]",
+  warning: "bg-[#FCE0BE] text-[#B15C1E]",
+  critical: "bg-[#F3DEDE] text-[#7A1219]",
+};
+
+export const STALE_LABEL: Record<StaleSeverity, string> = {
+  none: "—",
+  watch: "Watch",
+  warning: "Needs attention",
+  critical: "Critical",
+};
+
+// Stale = no activity in 5+ days AND the document isn't already done
+// (sent/cancelled documents don't need any further action).
+export function isStale(doc: DocRow): boolean {
+  return staleSeverity(doc) !== "none";
+}
+
+// ---------------------------------------------------------------------------
+// Approval undo window (ARD/RD get a few days to reverse an approval)
+// ---------------------------------------------------------------------------
+
+export const APPROVAL_UNDO_GRACE_DAYS = 3;
+
+export function daysSince(dateStr: string | null): number | null {
+  return calendarDaysSince(dateStr);
+}
+
+export function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// ARD can undo their review as long as the RD hasn't already acted on it,
+// and it's within the grace window.
+export function canUndoArdReview(doc: DocRow): boolean {
+  if (!doc.date_reviewed) return false;
+  if (doc.date_approved_by_rd) return false;
+  const days = daysSince(doc.date_reviewed);
+  return days !== null && days <= APPROVAL_UNDO_GRACE_DAYS;
+}
+
+// RD can undo their approval as long as nothing downstream has happened yet
+// (signed, transmitted, or marked sent), and it's within the grace window.
+export function canUndoRdApproval(doc: DocRow): boolean {
+  if (!doc.date_approved_by_rd) return false;
+  if (doc.date_signed_by_gov || doc.date_transmitted) return false;
+  if (statusTone(doc.status) === "sent") return false;
+  const days = daysSince(doc.date_approved_by_rd);
+  return days !== null && days <= APPROVAL_UNDO_GRACE_DAYS;
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline stage — where a document currently sits in the approval chain.
+// Checked from most-advanced backward, because not every document goes
+// through the full ARD -> RD -> Gov chain: plenty of simple letters skip
+// straight to "date_approved". Checking from the back means a document is
+// bucketed by the most advanced milestone it has actually reached, rather
+// than assuming everyone takes the same path.
+// ---------------------------------------------------------------------------
+
+export type PipelineStage =
+  | "cancelled"
+  | "returned"
+  | "awaiting_review"
+  | "awaiting_rd_approval"
+  | "awaiting_signature"
+  | "awaiting_final_approval"
+  | "ready_to_transmit"
+  | "transmitted";
+
+export function pipelineStage(doc: DocRow): PipelineStage {
+  const tone = statusTone(doc.status);
+  if (tone === "cancelled") return "cancelled";
+  if (tone === "returned") return "returned";
+
+  if (doc.date_transmitted) return "transmitted";
+  if (doc.date_approved) return "ready_to_transmit"; // finally approved — just needs to go out
+  if (doc.date_signed_by_gov) return "awaiting_final_approval"; // signed, waiting on final approval
+  if (doc.date_approved_by_rd) return "awaiting_signature"; // RD approved, waiting on Gov signature
+  if (doc.date_reviewed) return "awaiting_rd_approval"; // ARD reviewed, waiting on RD
+  return "awaiting_review"; // nothing yet, waiting on ARD
+}
+
+export const PIPELINE_STAGE_LABEL: Record<PipelineStage, string> = {
+  cancelled: "Cancelled",
+  returned: "Returned",
+  awaiting_review: "Needs ARD Review",
+  awaiting_rd_approval: "Needs RD Approval",
+  awaiting_signature: "Needs Gov Signature",
+  awaiting_final_approval: "Needs Final Approval",
+  ready_to_transmit: "Ready to Transmit",
+  transmitted: "Transmitted",
+};
+
+export function buildTimeline(doc: DocRow) {  const steps: { label: string; date: string | null }[] = [
     { label: "Drafted", date: doc.date_drafted },
     { label: "Reviewed (ARD)", date: doc.date_reviewed },
     { label: "Approved (RD)", date: doc.date_approved_by_rd },
@@ -91,28 +250,138 @@ export async function fetchDocuments(): Promise<DocRow[]> {
   const { data, error } = await supabase
     .from("document_tracker")
     .select("*")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error fetching documents:", error);
+    console.error(
+      "Error fetching documents:",
+      error.message || error.details || error.hint || JSON.stringify(error)
+    );
+    return [];
+  }
+  return data || [];
+}
+
+export async function fetchArchivedDocuments(): Promise<DocRow[]> {
+  const { data, error } = await supabase
+    .from("document_tracker")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching archived documents:", error);
     return [];
   }
   return data || [];
 }
 
 export async function insertDocument(patch: Partial<DocRow>) {
-  const { error } = await supabase.from("document_tracker").insert([patch]);
+  const { data, error } = await supabase.from("document_tracker").insert([patch]).select().single();
+  if (!error && data) {
+    await logAudit({
+      document_id: data.id,
+      document_no: data.document_no,
+      action: "created",
+    });
+  }
   return error;
 }
 
-export async function updateDocument(id: number, patch: Partial<DocRow>) {
+// Updates a document and writes one audit row per field that actually
+// changed, so the log reads like a real history rather than one opaque blob.
+export async function updateDocument(
+  id: number,
+  patch: Partial<DocRow>,
+  previous?: DocRow | null,
+  action: string = "field_updated"
+) {
   const { error } = await supabase.from("document_tracker").update(patch).eq("id", id);
+
+  if (!error && previous) {
+    const documentNo = previous.document_no;
+    const changedFields = Object.keys(patch) as (keyof DocRow)[];
+    for (const field of changedFields) {
+      const oldValue = previous[field];
+      const newValue = (patch as Record<string, unknown>)[field];
+      if (oldValue === newValue) continue;
+      await logAudit({
+        document_id: id,
+        document_no: documentNo,
+        action,
+        field: String(field),
+        old_value: oldValue == null ? null : String(oldValue),
+        new_value: newValue == null ? null : String(newValue),
+      });
+    }
+  }
+
   return error;
 }
 
-export async function deleteDocument(id: number) {
-  const { error } = await supabase.from("document_tracker").delete().eq("id", id);
+// Soft delete — the record stays in the database, just hidden from the main
+// register and excluded from stats/queues, and can be restored later.
+export async function archiveDocument(doc: DocRow) {
+  const { error } = await supabase
+    .from("document_tracker")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", doc.id);
+
+  if (!error) {
+    await logAudit({ document_id: doc.id, document_no: doc.document_no, action: "archived" });
+  }
   return error;
+}
+
+export async function restoreDocument(doc: DocRow) {
+  const { error } = await supabase
+    .from("document_tracker")
+    .update({ deleted_at: null })
+    .eq("id", doc.id);
+
+  if (!error) {
+    await logAudit({ document_id: doc.id, document_no: doc.document_no, action: "restored" });
+  }
+  return error;
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+export type AuditLogEntry = {
+  document_id: number | null;
+  document_no: string | null;
+  action: string;
+  field?: string | null;
+  old_value?: string | null;
+  new_value?: string | null;
+  actor?: string | null;
+};
+
+export async function logAudit(entry: AuditLogEntry) {
+  const { error } = await supabase.from("document_tracker_audit_log").insert([entry]);
+  if (error) console.error("Failed to write audit log entry:", error);
+  return error;
+}
+
+export type AuditLogRow = AuditLogEntry & { id: number; created_at: string };
+
+export async function fetchAuditLog(documentId?: number): Promise<AuditLogRow[]> {
+  let query = supabase
+    .from("document_tracker_audit_log")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (documentId) query = query.eq("document_id", documentId);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("Error fetching audit log:", error);
+    return [];
+  }
+  return data || [];
 }
 
 // ---------------------------------------------------------------------------
