@@ -259,9 +259,17 @@ function BrandPanel() {
           </div>
         </div>
 
-        <p className="absolute bottom-7 left-8 hidden max-w-[16rem] text-[13px] leading-snug text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.5)] md:block">
-          Department of Economy, Planning, and Development
-        </p>
+
+        <div className="absolute bottom-7 left-8 hidden items-center gap-3 md:flex">
+          <img 
+            src="depdev-logo-wbg.png" 
+            alt="DEPDev Logo" 
+            className="h-16 w-auto drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" 
+          />
+          <p className="max-w-[16rem] text-[13px] leading-snug text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.5)]">
+            Department of Economy, Planning, and Development
+          </p>
+        </div>
       </aside>
     </div>
   );
