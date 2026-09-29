@@ -59,7 +59,7 @@ export default function RequireRole({
   if (status === "denied") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-6 bg-[#F8F9FA]">
-        <p className="text-[#7A1219] font-medium">You don't have access to this page.</p>
+        <p className="text-[#7A1219] font-medium">You don&apos;t have access to this page.</p>
         <button
           onClick={() => router.replace(profile ? roleHome(profile.role) : "/login")}
           className="text-[#0C2D5C] hover:underline text-sm"
