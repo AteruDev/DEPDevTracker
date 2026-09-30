@@ -9,6 +9,7 @@ import {
   STALE_LABEL,
   daysSinceActivity,
   updateDocument,
+  parseAttachment,
 } from "../../lib/documentTracker";
 
 export default function DocDetail({
@@ -167,9 +168,31 @@ export default function DocDetail({
         <DetailRow label="Sector / Division" value={doc.sector_division} />
         <DetailRow label="Drafted by" value={doc.drafted_by} />
         <DetailRow label="Email address" value={doc.email_address} multiline />
-        <DetailRow label="Attachments" value={doc.attachments} />
+        <AttachmentRow value={doc.attachments} />
         <DetailRow label="Remarks" value={doc.remarks} multiline />
       </div>
+    </div>
+  );
+}
+
+function AttachmentRow({ value }: { value: string | null }) {
+  const parsed = parseAttachment(value);
+  if (!parsed) return null;
+  return (
+    <div>
+      <p className="text-xs text-[#6B6A63] mb-0.5">Attachments</p>
+      {parsed.url ? (
+        <a
+          href={parsed.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[#0C2D5C] hover:underline"
+        >
+          {parsed.label}
+        </a>
+      ) : (
+        <p className="text-[#1B2A44]">{parsed.label}</p>
+      )}
     </div>
   );
 }

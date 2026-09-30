@@ -60,10 +60,13 @@ export function StatItem({
 
   if (!onClick) return content;
 
+if (!onClick) return content;
+
   return (
     <button
       onClick={onClick}
-      className={`pb-1 border-b-2 transition-colors hover:opacity-80 ${
+      // Add cursor-pointer right here vvvvvvvvvvvvvv
+      className={`pb-1 border-b-2 cursor-pointer transition-colors hover:opacity-80 ${
         active ? "border-[#1B2A44]" : "border-transparent"
       }`}
     >

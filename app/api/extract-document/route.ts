@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import { supabase } from "../../../lib/supabase";
 
 export const runtime = "nodejs";
 
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     const base64 = Buffer.from(bytes).toString("base64");
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-2.5-flash",
       contents: [
         {
           role: "user",
@@ -89,16 +90,36 @@ export async function POST(req: NextRequest) {
     }
 
     const extracted = JSON.parse(text);
-    return NextResponse.json({ extracted });
-  } catch (err: unknown) {
+
+    // Also store the actual scanned file, so the record links to the real
+    // source document instead of just holding AI-read text. Uploaded under
+    // "scanned/" since we don't have a confirmed document number to file it
+    // under yet — the person hasn't reviewed/saved the record at this point.
+    let attachmentUrl: string | null = null;
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `scanned/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("document-attachments")
+        .upload(path, Buffer.from(bytes), {
+          contentType: file.type || "application/octet-stream",
+          upsert: false,
+        });
+      if (!uploadError) {
+        const { data } = supabase.storage.from("document-attachments").getPublicUrl(path);
+        attachmentUrl = data.publicUrl;
+      } else {
+        console.error("Attachment upload failed:", uploadError.message);
+      }
+    } catch (uploadErr) {
+      console.error("Attachment upload failed:", uploadErr);
+    }
+
+    return NextResponse.json({ extracted, attachmentUrl });
+  } catch (err: any) {
     console.error("Document extraction failed:", err);
     return NextResponse.json(
-      {
-        error:
-          err instanceof Error
-            ? err.message
-            : "Extraction failed. Please try again or enter details manually.",
-      },
+      { error: err?.message || "Extraction failed. Please try again or enter details manually." },
       { status: 500 }
     );
   }

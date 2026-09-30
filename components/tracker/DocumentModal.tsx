@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Field } from "./ui";
+import { uploadAttachment } from "../../lib/documentTracker";
 
 export type DocForm = {
   document_no: string;
@@ -13,6 +14,7 @@ export type DocForm = {
   recipients: string;
   email_address: string;
   remarks: string;
+  attachments: string;
 };
 
 export const EMPTY_DOC_FORM: DocForm = {
@@ -25,6 +27,7 @@ export const EMPTY_DOC_FORM: DocForm = {
   recipients: "",
   email_address: "",
   remarks: "",
+  attachments: "",
 };
 
 export default function DocumentModal({
@@ -56,6 +59,26 @@ export default function DocumentModal({
 }) {
   function update<K extends keyof DocForm>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  async function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    setUploadError(null);
+    setUploading(true);
+    const { url, error: uploadErr } = await uploadAttachment(file, form.document_no || "untitled");
+    setUploading(false);
+
+    if (uploadErr || !url) {
+      setUploadError(uploadErr || "Upload failed. Please try again.");
+      return;
+    }
+    update("attachments", url);
   }
 
   return (
@@ -171,6 +194,38 @@ export default function DocumentModal({
               onChange={(e) => update("email_address", e.target.value)}
               className="input"
             />
+          </Field>
+
+          <Field label="Attachment">
+            {form.attachments ? (
+              <div className="flex items-center justify-between gap-3 bg-white border border-[#DDD7C8] px-3 py-2">
+                <a
+                  href={form.attachments}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-[#0C2D5C] hover:underline truncate"
+                >
+                  View attached file
+                </a>
+                <button
+                  type="button"
+                  onClick={() => update("attachments", "")}
+                  className="text-xs text-[#7A1219] hover:underline shrink-0"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <input
+                type="file"
+                onChange={handleAttachmentChange}
+                disabled={uploading}
+                className="input"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+              />
+            )}
+            {uploading && <p className="mt-1 text-xs text-[#6B6A63]">Uploading…</p>}
+            {uploadError && <p className="mt-1 text-xs text-[#7A1219]">{uploadError}</p>}
           </Field>
 
           <Field label="Remarks">

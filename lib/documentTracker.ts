@@ -26,7 +26,7 @@ export type DocRow = {
   deleted_at: string | null;
 };
 
-export type StatusTone = "sent" | "cancelled" | "pending" | "none";
+export type StatusTone = "sent" | "cancelled" | "returned" | "pending" | "none";
 
 // ---------------------------------------------------------------------------
 // Formatting + status helpers
@@ -51,6 +51,7 @@ export function statusTone(status: string | null): StatusTone {
   if (!status || !status.trim()) return "none";
   const s = status.toLowerCase();
   if (s.includes("cancel")) return "cancelled";
+  if (s.includes("return") || s.includes("revision")) return "returned";
   if (s.includes("sent")) return "sent";
   return "pending";
 }
@@ -58,6 +59,7 @@ export function statusTone(status: string | null): StatusTone {
 export const STATUS_STYLES: Record<StatusTone, string> = {
   sent: "bg-[#E7EFE9] text-[#3C6E4A]",
   cancelled: "bg-[#F3E6E6] text-[#7A1219]",
+  returned: "bg-[#F3E6E6] text-[#7A1219]",
   pending: "bg-[#FBF0DC] text-[#A6741B]",
   none: "bg-[#EDECE6] text-[#6B6A63]",
 };
@@ -65,6 +67,7 @@ export const STATUS_STYLES: Record<StatusTone, string> = {
 export const STATUS_LABEL: Record<StatusTone, string> = {
   sent: "Sent",
   cancelled: "Cancelled",
+  returned: "Returned",
   pending: "In process",
   none: "No status",
 };
@@ -196,6 +199,7 @@ export function canUndoRdApproval(doc: DocRow): boolean {
 
 export type PipelineStage =
   | "cancelled"
+  | "returned"
   | "awaiting_review"
   | "awaiting_rd_approval"
   | "awaiting_signature"
@@ -206,6 +210,7 @@ export type PipelineStage =
 export function pipelineStage(doc: DocRow): PipelineStage {
   const tone = statusTone(doc.status);
   if (tone === "cancelled") return "cancelled";
+  if (tone === "returned") return "returned";
 
   if (doc.date_transmitted) return "transmitted";
   if (doc.date_approved) return "ready_to_transmit"; // finally approved — just needs to go out
@@ -217,6 +222,7 @@ export function pipelineStage(doc: DocRow): PipelineStage {
 
 export const PIPELINE_STAGE_LABEL: Record<PipelineStage, string> = {
   cancelled: "Cancelled",
+  returned: "Returned",
   awaiting_review: "Needs ARD Review",
   awaiting_rd_approval: "Needs RD Approval",
   awaiting_signature: "Needs Gov Signature",
@@ -381,6 +387,56 @@ export async function fetchAuditLog(documentId?: number): Promise<AuditLogRow[]>
 // ---------------------------------------------------------------------------
 // Categories (Secretariat-managed picklist)
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Attachments — real files in Supabase Storage, not just a filename string.
+// ---------------------------------------------------------------------------
+
+const ATTACHMENTS_BUCKET = "document-attachments";
+
+export async function uploadAttachment(
+  file: File,
+  documentNo: string
+): Promise<{ url: string | null; error: string | null }> {
+  const safeDocNo = (documentNo || "untitled").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${safeDocNo}/${Date.now()}-${safeFileName}`;
+
+  const { error } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+
+  if (error) return { url: null, error: error.message };
+
+  const { data } = supabase.storage.from(ATTACHMENTS_BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, error: null };
+}
+
+// Parses the free-text "attachments" field, which can be a plain filename
+// (legacy entries with nothing to click), a bare URL, or "label — url" (the
+// format used when backfilling real links, e.g. from the original Excel
+// file's hyperlinked Attachments column).
+export function parseAttachment(value: string | null): { label: string; url: string | null } | null {
+  if (!value || !value.trim()) return null;
+  const trimmed = value.trim();
+
+  const sepIndex = trimmed.indexOf(" — ");
+  if (sepIndex !== -1) {
+    const label = trimmed.slice(0, sepIndex).trim();
+    const url = trimmed.slice(sepIndex + 3).trim();
+    if (isAttachmentUrl(url)) return { label: label || "View attached file", url };
+  }
+
+  if (isAttachmentUrl(trimmed)) return { label: "View attached file", url: trimmed };
+
+  return { label: trimmed, url: null };
+}
+
+export function isAttachmentUrl(value: string | null): boolean {
+  if (!value) return false;
+  return /^https?:\/\//i.test(value.trim());
+}
 
 export type Category = { id: number; name: string };
 
