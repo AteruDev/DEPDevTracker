@@ -14,11 +14,13 @@ import {
   PipelineStage,
   PIPELINE_STAGE_LABEL,
 } from "../lib/documentTracker";
+import { supabase } from "../lib/supabase";
 import { exportDocumentsToExcel } from "../lib/exportToExcel";
 import TrackerHeader from "./tracker/TrackerHeader";
 import TrackerToolbar, { ToolbarFilters } from "./tracker/TrackerToolbar";
 import TrackerTable from "./tracker/TrackerTable";
-import DocumentModal, { DocForm, EMPTY_DOC_FORM } from "./tracker/DocumentModal";
+import TrackerPagination from "./tracker/TrackerPagination";
+import DocumentModal, { DocForm, EMPTY_DOC_FORM, DEFAULT_DRAFTER } from "./tracker/DocumentModal";
 import { StatItem, Divider } from "./tracker/ui";
 
 const displayFont = Source_Serif_4({
@@ -91,6 +93,18 @@ export default function DocumentTrackerView({
   const [scanning, setScanning] = useState(false);
   const [scannedFromFile, setScannedFromFile] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+
+  // Default status for new documents: "In process" if it exists in the status list,
+  // otherwise the closest open-ended status (never Cancelled / Returned / Sent).
+  const defaultStatus = useMemo(
+    () =>
+      statusOptions.find((st) => /in[\s-]?process/i.test(st)) ??
+      statusOptions.find((st) => /draft|pending/i.test(st)) ??
+      statusOptions.find((st) => !/cancel|return|sent/i.test(st)) ??
+      "In process",
+    [statusOptions]
+  );
 
   useEffect(() => {
     fetchDocuments();
@@ -100,9 +114,22 @@ export default function DocumentTrackerView({
   async function fetchDocuments() {
     setLoading(true);
     const data = await fetchDocumentsFromDb();
-    setDocuments(queueFilter ? data.filter(queueFilter) : data);
+    const list = queueFilter ? data.filter(queueFilter) : data;
+    setDocuments(list);
     setLoading(false);
+    return list;
   }
+
+  // After a new document is saved: scroll to it and keep it highlighted for a few
+  // seconds so the secretariat can double-check it.
+  useEffect(() => {
+    if (highlightId == null || loading) return;
+    document
+      .getElementById(`doc-row-${highlightId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setHighlightId(null), 8000);
+    return () => clearTimeout(t);
+  }, [highlightId, loading]);
 
   async function handleScanDocument(file: File) {
     setScanning(true);
@@ -110,7 +137,19 @@ export default function DocumentTrackerView({
       const body = new FormData();
       body.append("file", file);
 
-      const res = await fetch("/api/extract-document", { method: "POST", body });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        alert("Your session has expired. Please sign in again.");
+        return;
+      }
+
+      const res = await fetch("/api/extract-document", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body,
+      });
       const json = await res.json();
 
       if (!res.ok) {
@@ -122,14 +161,14 @@ export default function DocumentTrackerView({
       setForm({
         document_no: e.document_no || "",
         category: e.category || "Letter",
-        status: "Drafted",
-        drafted_by: e.drafted_by || "",
+        status: defaultStatus,
+        drafted_by: e.drafted_by || DEFAULT_DRAFTER,
         sector_division: e.sector_division || "",
         email_subject: e.email_subject || "",
         recipients: e.recipients || "",
         email_address: e.email_address || "",
         remarks: e.remarks || "",
-        attachments: json.attachmentUrl || "",
+        attachments: "",
       });
       setEditingId(null);
       setEditingDoc(null);
@@ -161,7 +200,7 @@ export default function DocumentTrackerView({
     setForm({
       document_no: doc.document_no || "",
       category: doc.category || "Letter",
-      status: doc.status || "Drafted",
+      status: doc.status || defaultStatus,
       drafted_by: doc.drafted_by || "",
       sector_division: doc.sector_division || "",
       email_subject: doc.email_subject || "",
@@ -223,11 +262,23 @@ export default function DocumentTrackerView({
       return;
     }
 
+    const wasNew = !editingId;
     setForm(EMPTY_DOC_FORM);
     setEditingId(null);
     setEditingDoc(null);
     setShowModal(false);
-    fetchDocuments();
+
+    const fresh = await fetchDocuments();
+    if (wasNew) {
+      // Document numbers are unique, so this finds the document we just saved.
+      const added = fresh.find((d) => d.document_no === payload.document_no);
+      if (added) {
+        resetFilters(); // make sure an active filter can't hide it
+        setPage(1); // newest documents are on the first page
+        setExpandedId(added.id);
+        setHighlightId(added.id);
+      }
+    }
   }
 
   const filtered = useMemo(() => {
@@ -279,6 +330,21 @@ export default function DocumentTrackerView({
     filters.missingAttachmentOnly ||
     stageFilter !== "all";
 
+  // ---- Pagination (done in the browser; the export still includes every filtered row)
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
+  const pageKey = JSON.stringify([filters, stageFilter, pageSize]);
+  const [prevPageKey, setPrevPageKey] = useState(pageKey);
+  if (prevPageKey !== pageKey) {
+    // Any filter / page-size change sends you back to page 1.
+    setPrevPageKey(pageKey);
+    setPage(1);
+  }
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pagedDocuments = filtered.slice(pageStart, pageStart + pageSize);
+
   async function handleExport() {
     setExporting(true);
     try {
@@ -308,6 +374,19 @@ export default function DocumentTrackerView({
         .font-body {
           font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
         }
+        @keyframes rowFlash {
+          0%,
+          100% {
+            background-color: #fff3cf;
+          }
+          50% {
+            background-color: #ffdf85;
+          }
+        }
+        .row-new {
+          animation: rowFlash 1.4s ease-in-out 5;
+          background-color: #fff3cf;
+        }
       `}</style>
 
       <TrackerHeader
@@ -315,7 +394,7 @@ export default function DocumentTrackerView({
         eyebrow={eyebrow}
         allowManage={allowManage}
         onNewDocument={() => {
-          setForm(EMPTY_DOC_FORM);
+          setForm({ ...EMPTY_DOC_FORM, status: defaultStatus });
           setEditingId(null);
           setEditingDoc(null);
           setScannedFromFile(false);
@@ -452,7 +531,15 @@ export default function DocumentTrackerView({
         {allowManage && (
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs text-[#5B6478]">
-              Showing <span className="font-semibold text-[#26357F]">{filtered.length}</span> of {documents.length} documents
+              {hasActiveFilters ? (
+                <>
+                  <span className="font-semibold text-[#26357F]">{filtered.length}</span> of {documents.length} documents match your filters
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-[#26357F]">{documents.length}</span> documents
+                </>
+              )}
             </p>
             <button
               onClick={handleExport}
@@ -469,9 +556,11 @@ export default function DocumentTrackerView({
           </div>
         )}
 
+        <div id="doc-table" className="scroll-mt-6">
         <TrackerTable
-          documents={filtered}
+          documents={pagedDocuments}
           loading={loading}
+          highlightId={highlightId}
           expandedId={expandedId}
           setExpandedId={setExpandedId}
           emptyMessage={emptyQueueMessage}
@@ -483,6 +572,30 @@ export default function DocumentTrackerView({
           onArchive={handleArchive}
           onRefresh={fetchDocuments}
         />
+        </div>
+
+        {filtered.length > 0 && (
+          <TrackerPagination
+            page={currentPage}
+            pageSize={pageSize}
+            total={filtered.length}
+            onPage={(p) => {
+              setPage(p);
+              document.getElementById("doc-table")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            onPageSize={setPageSize}
+          />
+        )}
+
+        <footer className="mt-12 flex flex-col items-center text-center">
+          <div className="h-1 w-16 rounded-full mb-4 bg-[linear-gradient(90deg,#FFB400_0%,#FFB400_25%,#26357F_25%,#26357F_50%,#0B6B3A_50%,#0B6B3A_75%,#9B1C28_75%,#9B1C28_100%)]" />
+          <blockquote className="font-display italic text-base md:text-lg text-[#26357F] max-w-xl">
+            &ldquo;Great things are done by a series of small things brought together.&rdquo;
+          </blockquote>
+          <p className="mt-1.5 text-xs font-semibold uppercase tracking-wider text-[#B87900]">
+            &mdash; Vincent van Gogh
+          </p>
+        </footer>
       </div>
 
       {showModal && (

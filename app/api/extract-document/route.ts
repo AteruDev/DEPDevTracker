@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { supabase } from "../../../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
@@ -37,8 +37,49 @@ If a field genuinely isn't in the document, return null for it rather than guess
 
 Return only the JSON object matching the schema — no extra commentary.`;
 
+const ALLOWED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
+const ALLOWED_ROLES = ["secretariat"]; // only roles that can use "Scan Document"
+
+// Confirms the caller is a signed-in user with an allowed role. The browser sends
+// its Supabase access token in the Authorization header; Supabase validates it.
+async function authorize(req: NextRequest): Promise<{ ok: true } | { ok: false; res: NextResponse }> {
+  const deny = (status: number, error: string) => ({
+    ok: false as const,
+    res: NextResponse.json({ error }, { status }),
+  });
+
+  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return deny(401, "Please sign in to scan documents.");
+
+  const client = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    }
+  );
+
+  const { data: userData, error: userError } = await client.auth.getUser(token);
+  if (userError || !userData.user) return deny(401, "Your session has expired. Please sign in again.");
+
+  const { data: profile } = await client
+    .from("profiles")
+    .select("role")
+    .eq("id", userData.user.id)
+    .single();
+
+  if (!profile || !ALLOWED_ROLES.includes(profile.role)) {
+    return deny(403, "Your account isn't allowed to scan documents.");
+  }
+  return { ok: true };
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const auth = await authorize(req);
+    if (!auth.ok) return auth.res;
+
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
         { error: "GEMINI_API_KEY is not configured on the server." },
@@ -57,6 +98,13 @@ export async function POST(req: NextRequest) {
     if (file.size > MAX_BYTES) {
       return NextResponse.json(
         { error: "File is too large. Please upload something under 15MB." },
+        { status: 400 }
+      );
+    }
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { error: "Unsupported file type. Please upload a PDF, PNG, JPG or WEBP." },
         { status: 400 }
       );
     }
@@ -91,31 +139,8 @@ export async function POST(req: NextRequest) {
 
     const extracted = JSON.parse(text);
 
-    // Also store the actual scanned file, so the record links to the real
-    // source document instead of just holding AI-read text. Uploaded under
-    // "scanned/" since we don't have a confirmed document number to file it
-    // under yet — the person hasn't reviewed/saved the record at this point.
-    let attachmentUrl: string | null = null;
-    try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `scanned/${Date.now()}-${safeName}`;
-      const { error: uploadError } = await supabase.storage
-        .from("document-attachments")
-        .upload(path, Buffer.from(bytes), {
-          contentType: file.type || "application/octet-stream",
-          upsert: false,
-        });
-      if (!uploadError) {
-        const { data } = supabase.storage.from("document-attachments").getPublicUrl(path);
-        attachmentUrl = data.publicUrl;
-      } else {
-        console.error("Attachment upload failed:", uploadError.message);
-      }
-    } catch (uploadErr) {
-      console.error("Attachment upload failed:", uploadErr);
-    }
-
-    return NextResponse.json({ extracted, attachmentUrl });
+    // The scanned file is NOT stored. Attachments are links pasted by the user.
+    return NextResponse.json({ extracted });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error("Document extraction failed:", err);

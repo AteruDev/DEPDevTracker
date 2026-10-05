@@ -146,7 +146,11 @@ export async function exportDocumentsToExcel(documents: DocRow[], note?: string)
     ];
 
     const row = ws.addRow(values);
-    row.height = 32;
+    const lines = Math.max(
+      1,
+      ...[doc.recipients, doc.email_address, doc.remarks].map((t) => (t ? t.split(/\r?\n/).length : 1))
+    );
+    row.height = Math.min(160, Math.max(32, lines * 15 + 8));
 
     COLUMNS.forEach((c, i) => {
       const cell = row.getCell(i + 1);

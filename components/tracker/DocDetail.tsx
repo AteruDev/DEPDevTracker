@@ -67,23 +67,23 @@ export default function DocDetail({
           {renderActions && renderActions(doc, onRefresh)}
 
           {allowManage && !isEditing && (
-            <div className="flex gap-4">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => onEditDetails && onEditDetails(doc)}
-                className="text-xs font-medium text-[#0C2D5C] hover:underline"
+                className="text-xs font-semibold text-[#26357F] bg-[#E4ECFA] hover:bg-[#26357F] hover:text-white rounded-full px-3 py-1.5 transition-colors"
               >
                 Edit Details
               </button>
               <button
                 onClick={() => setIsEditing(true)}
-                className="text-xs font-medium text-[#0C2D5C] hover:underline"
+                className="text-xs font-semibold text-[#26357F] bg-[#E4ECFA] hover:bg-[#26357F] hover:text-white rounded-full px-3 py-1.5 transition-colors"
               >
                 Edit Dates
               </button>
               {onArchive && (
                 <button
                   onClick={() => onArchive(doc)}
-                  className="text-xs font-medium text-[#7A1219] hover:underline"
+                  className="text-xs font-semibold text-[#9B1C28] bg-[#FDECEE] hover:bg-[#9B1C28] hover:text-white rounded-full px-3 py-1.5 ml-2 transition-colors"
                 >
                   Archive
                 </button>

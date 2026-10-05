@@ -179,7 +179,7 @@ export default function SecretariatPage() {
                       </div>
                       <button
                         onClick={() => handleRestore(doc)}
-                        className="text-xs font-medium text-[#0C2D5C] hover:underline shrink-0 ml-4"
+                        className="text-xs font-semibold text-[#0B6B3A] bg-[#D6F0DF] hover:bg-[#0B6B3A] hover:text-white rounded-full px-3 py-1 shrink-0 ml-4 transition-colors"
                       >
                         Restore
                       </button>
@@ -198,9 +198,9 @@ export default function SecretariatPage() {
                 <p className="text-xs font-bold uppercase tracking-wider text-[#26357F] mb-3">Categories</p>
                 <ul className="space-y-1.5 mb-3 max-h-40 overflow-y-auto">
                   {categories.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between text-sm text-[#14213D]">
+                    <li key={c.id} className="flex items-center justify-between gap-3 text-sm text-[#14213D] rounded-lg px-2.5 py-1.5 hover:bg-[#F1F6FE] transition-colors">
                       {c.name}
-                      <button disabled={busy} onClick={() => handleRemove("category", c.id)} className="text-xs text-[#7A1219] hover:underline disabled:opacity-50">Remove</button>
+                      <button disabled={busy} onClick={() => handleRemove("category", c.id)} className="text-xs font-semibold text-[#9B1C28] bg-[#FDECEE] hover:bg-[#9B1C28] hover:text-white rounded-full px-2.5 py-0.5 shrink-0 transition-colors disabled:opacity-50">Remove</button>
                     </li>
                   ))}
                 </ul>
@@ -215,9 +215,9 @@ export default function SecretariatPage() {
                 <p className="text-xs font-bold uppercase tracking-wider text-[#26357F] mb-3">Sectors / Divisions</p>
                 <ul className="space-y-1.5 mb-3 max-h-40 overflow-y-auto">
                   {sectors.map((s) => (
-                    <li key={s.id} className="flex items-center justify-between text-sm text-[#14213D]">
+                    <li key={s.id} className="flex items-center justify-between gap-3 text-sm text-[#14213D] rounded-lg px-2.5 py-1.5 hover:bg-[#F1F6FE] transition-colors">
                       {s.name}
-                      <button disabled={busy} onClick={() => handleRemove("sector", s.id)} className="text-xs text-[#7A1219] hover:underline disabled:opacity-50">Remove</button>
+                      <button disabled={busy} onClick={() => handleRemove("sector", s.id)} className="text-xs font-semibold text-[#9B1C28] bg-[#FDECEE] hover:bg-[#9B1C28] hover:text-white rounded-full px-2.5 py-0.5 shrink-0 transition-colors disabled:opacity-50">Remove</button>
                     </li>
                   ))}
                 </ul>
@@ -232,9 +232,9 @@ export default function SecretariatPage() {
                 <p className="text-xs font-bold uppercase tracking-wider text-[#26357F] mb-3">Drafters</p>
                 <ul className="space-y-1.5 mb-3 max-h-40 overflow-y-auto">
                   {drafters.map((d) => (
-                    <li key={d.id} className="flex items-center justify-between text-sm text-[#14213D]">
+                    <li key={d.id} className="flex items-center justify-between gap-3 text-sm text-[#14213D] rounded-lg px-2.5 py-1.5 hover:bg-[#F1F6FE] transition-colors">
                       {d.name}
-                      <button disabled={busy} onClick={() => handleRemove("drafter", d.id)} className="text-xs text-[#7A1219] hover:underline disabled:opacity-50">Remove</button>
+                      <button disabled={busy} onClick={() => handleRemove("drafter", d.id)} className="text-xs font-semibold text-[#9B1C28] bg-[#FDECEE] hover:bg-[#9B1C28] hover:text-white rounded-full px-2.5 py-0.5 shrink-0 transition-colors disabled:opacity-50">Remove</button>
                     </li>
                   ))}
                 </ul>
@@ -249,9 +249,9 @@ export default function SecretariatPage() {
                 <p className="text-xs font-bold uppercase tracking-wider text-[#26357F] mb-3">Statuses</p>
                 <ul className="space-y-1.5 mb-3 max-h-40 overflow-y-auto">
                   {statuses.map((s) => (
-                    <li key={s.id} className="flex items-center justify-between text-sm text-[#14213D]">
+                    <li key={s.id} className="flex items-center justify-between gap-3 text-sm text-[#14213D] rounded-lg px-2.5 py-1.5 hover:bg-[#F1F6FE] transition-colors">
                       {s.name}
-                      <button disabled={busy} onClick={() => handleRemove("status", s.id)} className="text-xs text-[#7A1219] hover:underline disabled:opacity-50">Remove</button>
+                      <button disabled={busy} onClick={() => handleRemove("status", s.id)} className="text-xs font-semibold text-[#9B1C28] bg-[#FDECEE] hover:bg-[#9B1C28] hover:text-white rounded-full px-2.5 py-0.5 shrink-0 transition-colors disabled:opacity-50">Remove</button>
                     </li>
                   ))}
                 </ul>

@@ -98,8 +98,8 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-[#6B6A63] mb-1 block">
-        {label} {required && <span className="text-[#7A1219]"> *</span>}
+      <span className="text-xs font-semibold text-[#3A4A78] mb-1.5 block">
+        {label} {required && <span className="text-[#9B1C28]"> *</span>}
       </span>
       {children}
     </label>

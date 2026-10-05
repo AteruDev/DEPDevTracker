@@ -15,9 +15,17 @@ import {
 import { Th, Td } from "./ui";
 import DocDetail from "./DocDetail";
 
+// Documents added in the last 24 hours get a small "New" tag.
+function isRecentlyAdded(doc: DocRow): boolean {
+  if (!doc.created_at) return false;
+  const t = new Date(doc.created_at).getTime();
+  return !Number.isNaN(t) && Date.now() - t < 24 * 60 * 60 * 1000;
+}
+
 export default function TrackerTable({
   documents,
   loading,
+  highlightId,
   expandedId,
   setExpandedId,
   emptyMessage,
@@ -31,6 +39,7 @@ export default function TrackerTable({
 }: {
   documents: DocRow[];
   loading: boolean;
+  highlightId?: number | null;
   expandedId: number | null;
   setExpandedId: (id: number | null) => void;
   emptyMessage: string;
@@ -81,10 +90,24 @@ export default function TrackerTable({
               return (
                 <React.Fragment key={doc.id}>
                   <tr
+                    id={`doc-row-${doc.id}`}
                     onClick={() => setExpandedId(isOpen ? null : doc.id)}
-                    className="border-b border-[#EEF1F8] even:bg-[#F8FAFE] hover:bg-[#FFF3CF] cursor-pointer transition-colors"
+                    className={`border-b border-[#EEF1F8] even:bg-[#F8FAFE] hover:bg-[#FFF3CF] cursor-pointer transition-colors ${
+                      doc.id === highlightId ? "row-new" : ""
+                    }`}
                   >
-                    <Td className="font-medium whitespace-nowrap">{doc.document_no}</Td>
+                    <Td
+                      className={`font-medium whitespace-nowrap ${
+                        doc.id === highlightId ? "border-l-4 border-[#FFB400]" : ""
+                      }`}
+                    >
+                      {doc.document_no}
+                      {isRecentlyAdded(doc) && (
+                        <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-wide bg-[#FFB400] text-[#0C2D5C] rounded-full px-2 py-0.5">
+                          New
+                        </span>
+                      )}
+                    </Td>
                     <Td className="text-[#5B5F66] whitespace-nowrap">{doc.category || "—"}</Td>
                     <Td className="max-w-[280px] truncate" title={doc.email_subject || ""}>
                       {doc.email_subject}
