@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ extracted, attachmentUrl });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error("Document extraction failed:", err);
     return NextResponse.json(

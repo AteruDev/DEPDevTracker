@@ -9,10 +9,12 @@ import {
   updateDocument,
   archiveDocument,
   isStale,
+  hasAttachment,
   pipelineStage,
   PipelineStage,
   PIPELINE_STAGE_LABEL,
 } from "../lib/documentTracker";
+import { exportDocumentsToExcel } from "../lib/exportToExcel";
 import TrackerHeader from "./tracker/TrackerHeader";
 import TrackerToolbar, { ToolbarFilters } from "./tracker/TrackerToolbar";
 import TrackerTable from "./tracker/TrackerTable";
@@ -53,6 +55,7 @@ const EMPTY_FILTERS: ToolbarFilters = {
   sector: "All",
   drafter: "All",
   staleOnly: false,
+  missingAttachmentOnly: false,
 };
 
 export default function DocumentTrackerView({
@@ -87,6 +90,7 @@ export default function DocumentTrackerView({
   const [formError, setFormError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scannedFromFile, setScannedFromFile] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -234,6 +238,7 @@ export default function DocumentTrackerView({
       if (filters.sector !== "All" && d.sector_division !== filters.sector) return false;
       if (filters.drafter !== "All" && d.drafted_by !== filters.drafter) return false;
       if (filters.staleOnly && !isStale(d)) return false;
+      if (filters.missingAttachmentOnly && hasAttachment(d)) return false;
       if (stageFilter !== "all" && pipelineStage(d) !== stageFilter) return false;
 
       if (!q) return true;
@@ -260,7 +265,8 @@ export default function DocumentTrackerView({
       byStage[pipelineStage(d)]++;
     });
     const stale = documents.filter(isStale).length;
-    return { total: documents.length, stale, ...byStage };
+    const missingAttachment = documents.filter((d) => !hasAttachment(d)).length;
+    return { total: documents.length, stale, missingAttachment, ...byStage };
   }, [documents]);
 
   const hasActiveFilters =
@@ -270,7 +276,23 @@ export default function DocumentTrackerView({
     filters.sector !== "All" ||
     filters.drafter !== "All" ||
     filters.staleOnly ||
+    filters.missingAttachmentOnly ||
     stageFilter !== "all";
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportDocumentsToExcel(
+        filtered,
+        hasActiveFilters ? `Filtered view (${filtered.length} of ${documents.length})` : undefined
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Couldn't create the Excel file. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   function resetFilters() {
     setFilters(EMPTY_FILTERS);
@@ -278,7 +300,7 @@ export default function DocumentTrackerView({
   }
 
   return (
-    <main className={`min-h-screen bg-[#F8F9FA] text-[#1B2A44] ${displayFont.variable} ${bodyFont.variable}`}>
+    <main className={`min-h-screen bg-gradient-to-br from-[#E6EFFC] via-[#FFF7E3] to-[#E5F3EA] bg-fixed text-[#1B2A44] ${displayFont.variable} ${bodyFont.variable}`}>
       <style jsx global>{`
         .font-display {
           font-family: var(--font-display), Georgia, serif;
@@ -306,8 +328,14 @@ export default function DocumentTrackerView({
       <div className="max-w-7xl mx-auto px-6 pb-12 font-body">
         {headerExtra}
 
+        {/* --------------------------------------------------------------------- */}
+        {/* Find the block starting "{statsMode === "full" && (" in                */}
+        {/* DocumentTrackerView.tsx and replace the whole thing with this.         */}
+        {/* Only change from before: colorClass added to 6 of the StatItems.       */}
+        {/* --------------------------------------------------------------------- */}
+
         {statsMode === "full" && (
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-8 text-sm">
+          <div className="flex flex-wrap items-stretch gap-3 mb-8 text-sm">
             <StatItem
               label="Total records"
               value={stats.total}
@@ -321,7 +349,7 @@ export default function DocumentTrackerView({
             <StatItem
               label={PIPELINE_STAGE_LABEL.awaiting_review}
               value={stats.awaiting_review}
-              tone="pending"
+              colorClass="text-[#4A5FA0]"
               active={stageFilter === "awaiting_review"}
               onClick={() => setStageFilter((s) => (s === "awaiting_review" ? "all" : "awaiting_review"))}
             />
@@ -329,7 +357,7 @@ export default function DocumentTrackerView({
             <StatItem
               label={PIPELINE_STAGE_LABEL.awaiting_rd_approval}
               value={stats.awaiting_rd_approval}
-              tone="pending"
+              colorClass="text-[#1C7A6E]"
               active={stageFilter === "awaiting_rd_approval"}
               onClick={() =>
                 setStageFilter((s) => (s === "awaiting_rd_approval" ? "all" : "awaiting_rd_approval"))
@@ -339,7 +367,7 @@ export default function DocumentTrackerView({
             <StatItem
               label={PIPELINE_STAGE_LABEL.awaiting_signature}
               value={stats.awaiting_signature}
-              tone="pending"
+              colorClass="text-[#D4A339]"
               active={stageFilter === "awaiting_signature"}
               onClick={() =>
                 setStageFilter((s) => (s === "awaiting_signature" ? "all" : "awaiting_signature"))
@@ -349,7 +377,7 @@ export default function DocumentTrackerView({
             <StatItem
               label={PIPELINE_STAGE_LABEL.awaiting_final_approval}
               value={stats.awaiting_final_approval}
-              tone="pending"
+              colorClass="text-[#B85C1F]"
               active={stageFilter === "awaiting_final_approval"}
               onClick={() =>
                 setStageFilter((s) => (s === "awaiting_final_approval" ? "all" : "awaiting_final_approval"))
@@ -359,7 +387,7 @@ export default function DocumentTrackerView({
             <StatItem
               label={PIPELINE_STAGE_LABEL.ready_to_transmit}
               value={stats.ready_to_transmit}
-              tone="pending"
+              colorClass="text-[#C2410C]"
               active={stageFilter === "ready_to_transmit"}
               onClick={() =>
                 setStageFilter((s) => (s === "ready_to_transmit" ? "all" : "ready_to_transmit"))
@@ -397,6 +425,16 @@ export default function DocumentTrackerView({
               active={filters.staleOnly}
               onClick={() => setFilters((f) => ({ ...f, staleOnly: !f.staleOnly }))}
             />
+            <Divider />
+            <StatItem
+              label="Missing attachment"
+              value={stats.missingAttachment}
+              colorClass="text-[#5B4B8A]"
+              active={filters.missingAttachmentOnly}
+              onClick={() =>
+                setFilters((f) => ({ ...f, missingAttachmentOnly: !f.missingAttachmentOnly }))
+              }
+            />
           </div>
         )}
 
@@ -410,6 +448,26 @@ export default function DocumentTrackerView({
           hasActiveFilters={hasActiveFilters}
           onReset={resetFilters}
         />
+
+        {allowManage && (
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-[#5B6478]">
+              Showing <span className="font-semibold text-[#26357F]">{filtered.length}</span> of {documents.length} documents
+            </p>
+            <button
+              onClick={handleExport}
+              disabled={exporting || loading || filtered.length === 0}
+              className="inline-flex items-center gap-2 bg-[#0B6B3A] text-white text-sm font-semibold py-2 px-4 rounded-full shadow-sm hover:bg-[#08522C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M12 15V3" />
+              </svg>
+              {exporting ? "Preparing…" : "Export to Excel"}
+            </button>
+          </div>
+        )}
 
         <TrackerTable
           documents={filtered}

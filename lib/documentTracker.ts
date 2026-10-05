@@ -57,11 +57,11 @@ export function statusTone(status: string | null): StatusTone {
 }
 
 export const STATUS_STYLES: Record<StatusTone, string> = {
-  sent: "bg-[#E7EFE9] text-[#3C6E4A]",
-  cancelled: "bg-[#F3E6E6] text-[#7A1219]",
-  returned: "bg-[#F3E6E6] text-[#7A1219]",
-  pending: "bg-[#FBF0DC] text-[#A6741B]",
-  none: "bg-[#EDECE6] text-[#6B6A63]",
+  sent: "bg-[#D6F0DF] text-[#0B6B3A]",
+  cancelled: "bg-[#FAD9DC] text-[#9B1C28]",
+  returned: "bg-[#FFE0CC] text-[#B4410A]",
+  pending: "bg-[#DCE6FB] text-[#26357F]",
+  none: "bg-[#ECEEF3] text-[#5B6478]",
 };
 
 export const STATUS_LABEL: Record<StatusTone, string> = {
@@ -135,9 +135,9 @@ export function staleSeverity(doc: DocRow): StaleSeverity {
 
 export const STALE_STYLES: Record<StaleSeverity, string> = {
   none: "",
-  watch: "bg-[#FBF0DC] text-[#A6741B]",
-  warning: "bg-[#FCE0BE] text-[#B15C1E]",
-  critical: "bg-[#F3DEDE] text-[#7A1219]",
+  watch: "bg-[#FFF0B8] text-[#8A6100]",
+  warning: "bg-[#FFD9A8] text-[#B35300]",
+  critical: "bg-[#FAD0D4] text-[#9B1C28]",
 };
 
 export const STALE_LABEL: Record<StaleSeverity, string> = {
@@ -431,6 +431,10 @@ export function parseAttachment(value: string | null): { label: string; url: str
   if (isAttachmentUrl(trimmed)) return { label: "View attached file", url: trimmed };
 
   return { label: trimmed, url: null };
+}
+
+export function hasAttachment(doc: DocRow): boolean {
+  return !!doc.attachments && doc.attachments.trim() !== "";
 }
 
 export function isAttachmentUrl(value: string | null): boolean {

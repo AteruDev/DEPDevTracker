@@ -43,10 +43,10 @@ export default function TrackerTable({
   onRefresh: () => void;
 }) {
   return (
-    <div className="bg-white border border-[#DDD7C8] overflow-x-auto">
+    <div className="bg-white rounded-2xl shadow-md border border-[#DDE5F4] overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead>
-          <tr className="border-b border-[#DDD7C8] text-left">
+          <tr className="bg-[#E4ECFA] border-b-2 border-[#FFB400] text-left">
             <Th>Doc. No.</Th>
             <Th>Category</Th>
             <Th>Subject</Th>
@@ -82,7 +82,7 @@ export default function TrackerTable({
                 <React.Fragment key={doc.id}>
                   <tr
                     onClick={() => setExpandedId(isOpen ? null : doc.id)}
-                    className="border-b border-[#EDECE6] hover:bg-[#FAF9F5] cursor-pointer transition-colors"
+                    className="border-b border-[#EEF1F8] even:bg-[#F8FAFE] hover:bg-[#FFF3CF] cursor-pointer transition-colors"
                   >
                     <Td className="font-medium whitespace-nowrap">{doc.document_no}</Td>
                     <Td className="text-[#5B5F66] whitespace-nowrap">{doc.category || "—"}</Td>
@@ -94,7 +94,7 @@ export default function TrackerTable({
                     </Td>
                     <Td>
                       <span
-                        className={`inline-block px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[tone]}`}
+                        className={`inline-block px-2.5 py-1 text-xs font-semibold rounded-full ${STATUS_STYLES[tone]}`}
                       >
                         {tone === "none" ? doc.status ?? STATUS_LABEL.none : STATUS_LABEL[tone]}
                       </span>
@@ -104,7 +104,7 @@ export default function TrackerTable({
                         <span className="text-[#B8B5A9]">—</span>
                       ) : (
                         <span
-                          className={`inline-block px-2 py-0.5 text-xs font-medium ${STALE_STYLES[severity]}`}
+                          className={`inline-block px-2.5 py-1 text-xs font-semibold rounded-full ${STALE_STYLES[severity]}`}
                         >
                           {STALE_LABEL[severity]} · {days}d
                         </span>
@@ -114,14 +114,14 @@ export default function TrackerTable({
                       {formatDate(doc.date_transmitted) || "—"}
                     </Td>
                     <Td className="text-right pr-4">
-                      <span className="text-[#0C2D5C] text-xs font-medium">
+                      <span className="text-[#26357F] bg-[#E4ECFA] rounded-full px-3 py-1 text-xs font-semibold">
                         {isOpen ? "Hide" : "View"}
                       </span>
                     </Td>
                   </tr>
 
                   {isOpen && (
-                    <tr className="border-b border-[#EDECE6] bg-[#FAF9F5]">
+                    <tr className="border-b border-[#EEF1F8] bg-[#F1F6FE]">
                       <td colSpan={8} className="px-6 py-6">
                         <DocDetail
                           doc={doc}

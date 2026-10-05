@@ -9,6 +9,7 @@ export type ToolbarFilters = {
   sector: string;
   drafter: string;
   staleOnly: boolean;
+  missingAttachmentOnly: boolean;
 };
 
 export default function TrackerToolbar({
@@ -51,14 +52,14 @@ export default function TrackerToolbar({
           value={filters.search}
           onChange={(e) => onChange({ search: e.target.value })}
           placeholder="Search by doc no., subject, or recipient"
-          className="w-full bg-white border border-[#DDD7C8] pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-[#174337]"
+          className="w-full bg-white border border-[#C9D6EE] pl-9 pr-3 py-2 text-sm rounded-lg shadow-sm focus:outline-none focus:border-[#26357F] focus:ring-2 focus:ring-[#FFB400]/50"
         />
       </div>
 
       <select
         value={filters.category}
         onChange={(e) => onChange({ category: e.target.value })}
-        className="bg-white border border-[#DDD7C8] py-2 px-3 text-sm focus:outline-none focus:border-[#174337]"
+        className="bg-white border border-[#C9D6EE] py-2 px-3 text-sm rounded-lg shadow-sm focus:outline-none focus:border-[#26357F] focus:ring-2 focus:ring-[#FFB400]/50"
       >
         <option value="All">All categories</option>
         {categoryOptions.map((c) => (
@@ -71,7 +72,7 @@ export default function TrackerToolbar({
       <select
         value={filters.status}
         onChange={(e) => onChange({ status: e.target.value })}
-        className="bg-white border border-[#DDD7C8] py-2 px-3 text-sm focus:outline-none focus:border-[#174337]"
+        className="bg-white border border-[#C9D6EE] py-2 px-3 text-sm rounded-lg shadow-sm focus:outline-none focus:border-[#26357F] focus:ring-2 focus:ring-[#FFB400]/50"
       >
         <option value="All">All statuses</option>
         {statusOptions.map((s) => (
@@ -85,7 +86,7 @@ export default function TrackerToolbar({
         <select
           value={filters.sector}
           onChange={(e) => onChange({ sector: e.target.value })}
-          className="bg-white border border-[#DDD7C8] py-2 px-3 text-sm focus:outline-none focus:border-[#174337]"
+          className="bg-white border border-[#C9D6EE] py-2 px-3 text-sm rounded-lg shadow-sm focus:outline-none focus:border-[#26357F] focus:ring-2 focus:ring-[#FFB400]/50"
         >
           <option value="All">All sectors</option>
           {sectorOptions.map((s) => (
@@ -100,7 +101,7 @@ export default function TrackerToolbar({
         <select
           value={filters.drafter}
           onChange={(e) => onChange({ drafter: e.target.value })}
-          className="bg-white border border-[#DDD7C8] py-2 px-3 text-sm focus:outline-none focus:border-[#174337]"
+          className="bg-white border border-[#C9D6EE] py-2 px-3 text-sm rounded-lg shadow-sm focus:outline-none focus:border-[#26357F] focus:ring-2 focus:ring-[#FFB400]/50"
         >
           <option value="All">All drafters</option>
           {drafterOptions.map((d) => (
@@ -111,18 +112,8 @@ export default function TrackerToolbar({
         </select>
       )}
 
-      <label className="flex items-center gap-2 text-sm text-[#5B5F66] cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={filters.staleOnly}
-          onChange={(e) => onChange({ staleOnly: e.target.checked })}
-          className="accent-[#A6741B]"
-        />
-        Needs attention only
-      </label>
-
       {hasActiveFilters && (
-        <button onClick={onReset} className="text-sm text-[#174337] hover:underline">
+        <button onClick={onReset} className="text-sm text-[#0C2D5C] hover:underline">
           Reset filters
         </button>
       )}

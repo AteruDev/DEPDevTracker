@@ -34,21 +34,20 @@ export default function TrackerHeader({
   }
 
   return (
-    <div className="bg-white border-t-4 border-[#0C2D5C] shadow-sm mb-8">
+    <div className="shadow-lg mb-8">
+      <div className="h-2 bg-[linear-gradient(90deg,#FFB400_0%,#FFB400_25%,#26357F_25%,#26357F_50%,#0B6B3A_50%,#0B6B3A_75%,#9B1C28_75%,#9B1C28_100%)]" />
+      <div className="bg-gradient-to-r from-[#0C2D5C] via-[#173B82] to-[#26357F]">
       <div className="max-w-7xl mx-auto px-6 py-5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
-            <img src="/logo.png" alt="RDC Logo" className="w-16 h-16 object-contain" />
+            <img src="/logo.png" alt="RDC Logo" className="w-16 h-16 object-contain bg-white rounded-full p-1 shadow-lg ring-2 ring-[#FFB400]" />
             <div>
-              <p className="text-[10px] font-bold tracking-[0.15em] text-[#D4A339] uppercase mb-0.5">
-                Department of Economy, Planning, and Development
-              </p>
-              <h1 className="font-display text-2xl font-bold text-[#0C2D5C] leading-tight">
+              <h1 className="font-display text-2xl font-bold text-white leading-tight">
                 Regional Development Council · NIR
               </h1>
-              <p className="text-sm font-medium text-[#4A5568] mt-1">
+              <p className="text-sm font-medium text-[#C9D6EE] mt-1">
                 {title}
-                {eyebrow && <span className="text-[#A0AEC0] font-normal mx-1">|</span>} {eyebrow}
+                {eyebrow && <span className="text-[#7F93BD] font-normal mx-1">|</span>} {eyebrow}
               </p>
             </div>
           </div>
@@ -68,7 +67,7 @@ export default function TrackerHeader({
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={scanning}
-                      className="text-sm font-medium py-2 px-5 rounded border border-[#0C2D5C] text-[#0C2D5C] hover:bg-[#EAF0F9] disabled:opacity-60 transition-all"
+                      className="text-sm font-medium py-2 px-5 rounded-full border border-white/60 text-white hover:bg-white/15 disabled:opacity-60 transition-all"
                     >
                       {scanning ? "Scanning…" : "📄 Scan Document"}
                     </button>
@@ -76,7 +75,7 @@ export default function TrackerHeader({
                 )}
                 <button
                   onClick={onNewDocument}
-                  className="bg-[#0C2D5C] text-white text-sm font-medium py-2 px-5 rounded hover:bg-[#082044] shadow-sm transition-all"
+                  className="bg-[#FFB400] text-[#0C2D5C] text-sm font-bold py-2 px-5 rounded-full hover:bg-[#FFC933] shadow-md transition-all"
                 >
                   + New Document
                 </button>
@@ -85,12 +84,27 @@ export default function TrackerHeader({
 
             <button
               onClick={handleSignOut}
-              className="text-sm text-[#6B6A63] hover:text-[#14213D] hover:underline"
+              className="group inline-flex items-center gap-2 text-sm font-medium text-white bg-white/10 border border-white/25 rounded-full py-2 pl-4 pr-3.5 backdrop-blur-sm transition-all hover:bg-[#9B1C28] hover:border-[#9B1C28] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#FFB400]/70"
             >
               Sign out
+              <svg
+                className="w-4 h-4 transition-transform group-hover:translate-x-0.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                <path d="M16 17l5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

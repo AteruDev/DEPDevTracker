@@ -4,7 +4,11 @@ import React from "react";
 import { StatusTone } from "../../lib/documentTracker";
 
 export function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`px-4 py-3 font-medium text-[#6B6A63] text-xs ${className}`}>{children}</th>;
+  return (
+    <th className={`px-4 py-3.5 font-semibold text-[#0C2D5C] text-[11px] uppercase tracking-wider ${className}`}>
+      {children}
+    </th>
+  );
 }
 
 export function Td({
@@ -23,53 +27,61 @@ export function Td({
   );
 }
 
+// Stat cards are spaced by the flex gap, so dividers are no longer needed.
 export function Divider() {
-  return <div className="h-4 w-px bg-[#DDD7C8]" />;
+  return null;
 }
 
 export function StatItem({
   label,
   value,
   tone,
+  colorClass,
   onClick,
   active,
 }: {
   label: string;
   value: number;
   tone?: StatusTone | "warning";
+  /** Explicit Tailwind text-color class (e.g. "text-[#4A5FA0]"), overrides `tone`. */
+  colorClass?: string;
   onClick?: () => void;
   active?: boolean;
 }) {
-  const color =
+  const toneColor =
     tone === "sent"
-      ? "text-[#3C6E4A]"
+      ? "text-[#0B6B3A]"
       : tone === "cancelled"
-      ? "text-[#7A1219]"
+      ? "text-[#B3202C]"
       : tone === "pending"
-      ? "text-[#A6741B]"
+      ? "text-[#B87900]"
       : tone === "warning"
-      ? "text-[#A6741B]"
-      : "text-[#1B2A44]";
+      ? "text-[#D97706]"
+      : "text-[#26357F]";
 
+  const color = colorClass || toneColor;
+
+  // The card's accent is the text colour itself (border-current / bg-current),
+  // so every stat gets a matching colour bar and tinted hover/active state.
   const content = (
-    <div className="flex items-baseline gap-2">
-      <span className={`font-display text-2xl font-semibold ${color}`}>{value}</span>
-      <span className={active ? "text-[#1B2A44] font-medium" : "text-[#6B6A63]"}>{label}</span>
+    <div
+      className={`${color} flex flex-col items-start min-w-[120px] rounded-xl border-l-4 border-current px-4 py-2.5 shadow-sm transition-all ${
+        active
+          ? "bg-[color-mix(in_srgb,currentColor_12%,white)] ring-2 ring-current shadow-md"
+          : "bg-white hover:shadow-md hover:-translate-y-0.5"
+      }`}
+    >
+      <span className="font-display text-3xl font-bold leading-none">{value}</span>
+      <span className={`mt-1 text-xs ${active ? "font-semibold text-[#1B2A44]" : "font-medium text-[#5B6478]"}`}>
+        {label}
+      </span>
     </div>
   );
 
   if (!onClick) return content;
 
-if (!onClick) return content;
-
   return (
-    <button
-      onClick={onClick}
-      // Add cursor-pointer right here vvvvvvvvvvvvvv
-      className={`pb-1 border-b-2 cursor-pointer transition-colors hover:opacity-80 ${
-        active ? "border-[#1B2A44]" : "border-transparent"
-      }`}
-    >
+    <button onClick={onClick} className="cursor-pointer text-left">
       {content}
     </button>
   );

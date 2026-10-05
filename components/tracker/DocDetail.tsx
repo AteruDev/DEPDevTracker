@@ -62,7 +62,7 @@ export default function DocDetail({
     <div className="grid md:grid-cols-[1.3fr_1fr] gap-8">
       <div>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-medium text-[#6B6A63]">Approval timeline</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-[#26357F]">Approval timeline</p>
 
           {renderActions && renderActions(doc, onRefresh)}
 
@@ -107,7 +107,7 @@ export default function DocDetail({
                   type="date"
                   value={dates.date_signed_by_gov}
                   onChange={(e) => setDates({ ...dates, date_signed_by_gov: e.target.value })}
-                  className="mt-1 block w-full border border-[#DDD7C8] p-1.5 focus:outline-none focus:border-[#0C2D5C]"
+                  className="mt-1 block w-full border border-[#DDD7C8] p-1.5 rounded-lg shadow-sm focus:outline-none focus:border-[#26357F] focus:ring-2 focus:ring-[#FFB400]/50"
                 />
               </label>
               <label className="block text-xs text-[#6B6A63]">
@@ -116,7 +116,7 @@ export default function DocDetail({
                   type="date"
                   value={dates.date_approved}
                   onChange={(e) => setDates({ ...dates, date_approved: e.target.value })}
-                  className="mt-1 block w-full border border-[#DDD7C8] p-1.5 focus:outline-none focus:border-[#0C2D5C]"
+                  className="mt-1 block w-full border border-[#DDD7C8] p-1.5 rounded-lg shadow-sm focus:outline-none focus:border-[#26357F] focus:ring-2 focus:ring-[#FFB400]/50"
                 />
               </label>
               <label className="block text-xs text-[#6B6A63]">
@@ -125,7 +125,7 @@ export default function DocDetail({
                   type="date"
                   value={dates.date_transmitted}
                   onChange={(e) => setDates({ ...dates, date_transmitted: e.target.value })}
-                  className="mt-1 block w-full border border-[#DDD7C8] p-1.5 focus:outline-none focus:border-[#0C2D5C]"
+                  className="mt-1 block w-full border border-[#DDD7C8] p-1.5 rounded-lg shadow-sm focus:outline-none focus:border-[#26357F] focus:ring-2 focus:ring-[#FFB400]/50"
                 />
               </label>
             </div>
@@ -149,14 +149,14 @@ export default function DocDetail({
             {timeline.map((step, i) => (
               <li key={step.label} className="flex items-center gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#D4A339]" />
+                  <span className="w-3 h-3 rounded-full bg-[#FFB400] ring-4 ring-[#FFB400]/25" />
                   <div>
                     <p className="text-sm font-medium text-[#1B2A44]">{step.label}</p>
                     <p className="text-xs text-[#6B6A63]">{formatDate(step.date)}</p>
                   </div>
                 </div>
                 {i < timeline.length - 1 && (
-                  <span className="hidden md:inline-block w-6 h-px bg-[#DDD7C8] ml-4" />
+                  <span className="hidden md:inline-block w-6 h-0.5 bg-[#FFB400]/50 ml-4" />
                 )}
               </li>
             ))}
