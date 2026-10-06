@@ -2,32 +2,57 @@
 
 import React from "react";
 import Link from "next/link";
-import DocumentTrackerView from "../../components/DocumentTrackerView";
+import DocumentTrackerView, { QueueTab } from "../../components/DocumentTrackerView";
 import ReviewActions from "../../components/ReviewActions";
-import { DocRow, canUndoRdApproval } from "../../lib/documentTracker";
+import {
+  DocRow,
+  canUndoRdApproval,
+  pipelineStage,
+  statusTone,
+} from "../../lib/documentTracker";
 
-// A document stays in the RD queue while it's awaiting approval, AND for a
-// few days after being approved in case the approval needs to be undone.
-function isRdQueue(doc: DocRow) {
-  const s = (doc.status || "").toLowerCase();
-  if (s.includes("cancel") || s.includes("return") || s.includes("sent")) return false;
-
-  if (!doc.date_approved_by_rd) {
-    // Not yet approved — awaiting action.
-    return !!doc.date_reviewed;
-  }
-  // Already approved — only keep it visible while undo is still available.
-  return canUndoRdApproval(doc);
+function isOpen(doc: DocRow) {
+  const tone = statusTone(doc.status);
+  return tone !== "cancelled" && tone !== "returned" && tone !== "sent";
 }
+
+const TABS: QueueTab[] = [
+  {
+    key: "pending",
+    label: "Needs my approval",
+    filter: (d) => isOpen(d) && !!d.date_reviewed && !d.date_approved_by_rd,
+    emptyMessage: "Nothing waiting on your approval right now.",
+    oldestFirst: true,
+    bulk: { label: "Approve", field: "date_approved_by_rd", action: "approved" },
+  },
+  {
+    key: "approved",
+    label: "Recently approved",
+    filter: (d) => isOpen(d) && !!d.date_approved_by_rd && canUndoRdApproval(d),
+    emptyMessage: "No recent approvals you can still undo.",
+  },
+  {
+    key: "signature",
+    label: "Awaiting Gov signature",
+    filter: (d) =>
+      isOpen(d) && pipelineStage(d) === "awaiting_signature" && !canUndoRdApproval(d),
+    emptyMessage: "No approved documents are waiting on a signature.",
+  },
+  {
+    key: "returned",
+    label: "Returned",
+    filter: (d) => statusTone(d.status) === "returned",
+    emptyMessage: "No documents are waiting to be resubmitted.",
+  },
+];
 
 export default function RdPage() {
   return (
     <DocumentTrackerView
       title="Document Tracker"
       eyebrow="Regional Development Council · Negros Island Region — RD Approval Queue"
-      queueFilter={isRdQueue}
+      queueTabs={TABS}
       statsMode="count"
-      emptyQueueMessage="Nothing waiting on your approval right now."
       headerExtra={
         <div className="mb-6">
           {/* View switcher (no login yet) */}
@@ -42,14 +67,20 @@ export default function RdPage() {
           </div>
         </div>
       }
-      renderActions={(doc, refresh) => (
-        <ReviewActions
-          doc={doc}
-          approveField="date_approved_by_rd"
-          approveLabel="Approve"
-          onDone={refresh}
-        />
-      )}
+      renderActions={(doc, refresh) =>
+        statusTone(doc.status) === "returned" ? (
+          <div className="md:col-span-2 bg-[#FFF0B8] text-[#8A6100] text-sm rounded-xl px-4 py-3">
+            Returned for revision — waiting for the Secretariat to resubmit.
+          </div>
+        ) : (
+          <ReviewActions
+            doc={doc}
+            approveField="date_approved_by_rd"
+            approveLabel="Approve"
+            onDone={refresh}
+          />
+        )
+      }
     />
   );
 }

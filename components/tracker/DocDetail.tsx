@@ -11,6 +11,7 @@ import {
   updateDocument,
   parseAttachment,
 } from "../../lib/documentTracker";
+import DocHistory from "./DocHistory";
 
 export default function DocDetail({
   doc,
@@ -60,11 +61,10 @@ export default function DocDetail({
 
   return (
     <div className="grid md:grid-cols-[1.3fr_1fr] gap-8">
+      {renderActions && renderActions(doc, onRefresh)}
       <div>
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-bold uppercase tracking-wider text-[#26357F]">Approval timeline</p>
-
-          {renderActions && renderActions(doc, onRefresh)}
 
           {allowManage && !isEditing && (
             <div className="flex items-center gap-2">
@@ -162,6 +162,8 @@ export default function DocDetail({
             ))}
           </ol>
         )}
+
+        <DocHistory doc={doc} />
       </div>
 
       <div className="space-y-3 text-sm">

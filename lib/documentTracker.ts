@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { ROLE_LABEL, type UserRole } from "./auth";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -360,8 +361,66 @@ export type AuditLogEntry = {
   actor?: string | null;
 };
 
+// Who is making this change? Looked up from the signed-in user's profile and
+// cached per user, so a save that logs several fields doesn't re-query for
+// every row. getSession() reads the local session, so it costs no network call.
+let actorCache: { userId: string; label: string } | null = null;
+
+async function currentActorLabel(): Promise<string | null> {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) return null;
+    const cached = actorCache;
+    if (cached && cached.userId === user.id) return cached.label;
+
+    const { data } = await supabase
+      .from("profiles")
+      .select("full_name, role")
+      .eq("id", user.id)
+      .single();
+
+    const name = data?.full_name?.trim() || user.email || "Unknown user";
+    const role = data?.role ? ROLE_LABEL[data.role as UserRole] : null;
+    const label = role ? `${name} (${role})` : name;
+    actorCache = { userId: user.id, label };
+    return label;
+  } catch {
+    return null;
+  }
+}
+
+// Postgres "undefined column" / PostgREST "column not in schema cache".
+function isMissingColumnError(error: { code?: string; message?: string }) {
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /actor/i.test(error.message || "")
+  );
+}
+
 export async function logAudit(entry: AuditLogEntry) {
-  const { error } = await supabase.from("document_tracker_audit_log").insert([entry]);
+  const actor = entry.actor ?? (await currentActorLabel());
+
+  const { error } = await supabase
+    .from("document_tracker_audit_log")
+    .insert([{ ...entry, actor }]);
+
+  // If the "actor" column hasn't been added to the table yet, still record the
+  // change itself rather than losing the history entry altogether.
+  if (error && actor && isMissingColumnError(error)) {
+    console.warn(
+      'Audit log has no "actor" column yet - run supabase/add_audit_actor.sql. Logging without it.'
+    );
+    const { error: retryError } = await supabase
+      .from("document_tracker_audit_log")
+      .insert([{ ...entry, actor: undefined }]);
+    if (retryError) console.error("Failed to write audit log entry:", retryError);
+    return retryError;
+  }
+
   if (error) console.error("Failed to write audit log entry:", error);
   return error;
 }
@@ -382,6 +441,52 @@ export async function fetchAuditLog(documentId?: number): Promise<AuditLogRow[]>
     return [];
   }
   return data || [];
+}
+
+// Same data as fetchAuditLog, but tells the caller whether the read failed
+// (for example a missing permission) so the UI can say "history unavailable"
+// instead of wrongly claiming nothing has happened to the document.
+export async function fetchDocumentHistory(
+  documentId: number
+): Promise<{ rows: AuditLogRow[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from("document_tracker_audit_log")
+    .select("*")
+    .eq("document_id", documentId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching document history:", error);
+    return { rows: [], error: error.message || "Couldn't load history" };
+  }
+  return { rows: (data || []) as AuditLogRow[], error: null };
+}
+
+// What the ARD said when they reviewed a document, so the RD sees it at the
+// moment they decide. Read from the audit log (no extra column needed): the
+// newest "reviewed" event gives who/when, and a "note" row written within a
+// few seconds of it is the ARD's recommendation.
+export type ReviewContext = { reviewer: string | null; at: string; note: string | null };
+
+export async function fetchReviewContext(documentId: number): Promise<ReviewContext | null> {
+  const { data, error } = await supabase
+    .from("document_tracker_audit_log")
+    .select("*")
+    .eq("document_id", documentId)
+    .eq("action", "reviewed")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(10);
+
+  if (error || !data || data.length === 0) return null;
+  const rows = data as AuditLogRow[];
+  const main = rows.find((r) => r.field === "date_reviewed") ?? rows[0];
+  const t = new Date(main.created_at).getTime();
+  const noteRow = rows.find(
+    (r) => r.field === "note" && Math.abs(new Date(r.created_at).getTime() - t) <= 5000
+  );
+  return { reviewer: main.actor ?? null, at: main.created_at, note: noteRow?.new_value ?? null };
 }
 
 // ---------------------------------------------------------------------------

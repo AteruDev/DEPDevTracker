@@ -2,33 +2,46 @@
 
 import React from "react";
 import Link from "next/link";
-import DocumentTrackerView from "../../components/DocumentTrackerView";
+import DocumentTrackerView, { QueueTab } from "../../components/DocumentTrackerView";
 import ReviewActions from "../../components/ReviewActions";
-import { DocRow, canUndoArdReview } from "../../lib/documentTracker";
+import { DocRow, canUndoArdReview, statusTone } from "../../lib/documentTracker";
 
-// A document stays in the ARD queue while it's awaiting review, AND for a
-// few days after being reviewed in case the review needs to be undone.
-function isArdQueue(doc: DocRow) {
-  const s = (doc.status || "").toLowerCase();
-  if (s.includes("cancel") || s.includes("return") || s.includes("sent")) return false;
-
-  if (!doc.date_reviewed) {
-    // Not yet reviewed — awaiting action.
-    return !!doc.date_drafted;
-  }
-  // Already reviewed — only keep it visible while undo is still available.
-  return canUndoArdReview(doc);
+function isOpen(doc: DocRow) {
+  const tone = statusTone(doc.status);
+  return tone !== "cancelled" && tone !== "returned" && tone !== "sent";
 }
+
+const TABS: QueueTab[] = [
+  {
+    key: "pending",
+    label: "Needs my review",
+    filter: (d) => isOpen(d) && !d.date_reviewed && !!d.date_drafted,
+    emptyMessage: "Nothing waiting on your review right now.",
+    oldestFirst: true,
+    bulk: { label: "Mark reviewed", field: "date_reviewed", action: "reviewed" },
+  },
+  {
+    key: "reviewed",
+    label: "Recently reviewed",
+    filter: (d) => isOpen(d) && !!d.date_reviewed && canUndoArdReview(d),
+    emptyMessage: "No recent reviews you can still undo.",
+  },
+  {
+    key: "returned",
+    label: "Returned",
+    filter: (d) => statusTone(d.status) === "returned",
+    emptyMessage: "No documents are waiting to be resubmitted.",
+  },
+];
 
 export default function ArdPage() {
   return (
     <DocumentTrackerView
       title="Document Tracker"
       eyebrow="Regional Development Council · Negros Island Region — ARD Review Queue"
-      queueFilter={isArdQueue}
+      queueTabs={TABS}
       statsMode="count"
-      emptyQueueMessage="Nothing waiting on your review right now."
-            headerExtra={
+      headerExtra={
         <div className="mb-6">
           {/* View switcher (no login yet) */}
           <div className="flex items-center gap-4 p-3 bg-[#FBF0DC] border border-[#A6741B] inline-flex rounded">
@@ -42,14 +55,20 @@ export default function ArdPage() {
           </div>
         </div>
       }
-      renderActions={(doc, refresh) => (
-        <ReviewActions
-          doc={doc}
-          approveField="date_reviewed"
-          approveLabel="Mark reviewed"
-          onDone={refresh}
-        />
-      )}
+      renderActions={(doc, refresh) =>
+        statusTone(doc.status) === "returned" ? (
+          <div className="md:col-span-2 bg-[#FFF0B8] text-[#8A6100] text-sm rounded-xl px-4 py-3">
+            Returned for revision — waiting for the Secretariat to resubmit.
+          </div>
+        ) : (
+          <ReviewActions
+            doc={doc}
+            approveField="date_reviewed"
+            approveLabel="Mark reviewed"
+            onDone={refresh}
+          />
+        )
+      }
     />
   );
 }

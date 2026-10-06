@@ -7,8 +7,11 @@ import {
   fetchDocuments as fetchDocumentsFromDb,
   insertDocument,
   updateDocument,
+  today as todayIso,
   archiveDocument,
   isStale,
+  staleSeverity,
+  daysSinceActivity,
   hasAttachment,
   pipelineStage,
   PipelineStage,
@@ -20,8 +23,10 @@ import TrackerHeader from "./tracker/TrackerHeader";
 import TrackerToolbar, { ToolbarFilters } from "./tracker/TrackerToolbar";
 import TrackerTable from "./tracker/TrackerTable";
 import TrackerPagination from "./tracker/TrackerPagination";
+import QueueTabs from "./tracker/QueueTabs";
+import StatGroups from "./tracker/StatGroups";
 import DocumentModal, { DocForm, EMPTY_DOC_FORM, DEFAULT_DRAFTER } from "./tracker/DocumentModal";
-import { StatItem, Divider } from "./tracker/ui";
+import { SortState, SortKey, nextSort, sortDocuments } from "../lib/documentSort";
 
 const displayFont = Source_Serif_4({
   subsets: ["latin"],
@@ -35,6 +40,19 @@ const bodyFont = IBM_Plex_Sans({
   variable: "--font-body",
 });
 
+// A named slice of the queue (ARD/RD pages). Tabs show live counts; the page
+// only loads documents that belong to at least one tab.
+export type QueueTab = {
+  key: string;
+  label: string;
+  filter: (doc: DocRow) => boolean;
+  emptyMessage?: string;
+  /** Longest-waiting first, plus a "N waiting · longest wait" summary line. */
+  oldestFirst?: boolean;
+  /** Shows checkboxes and a bulk button on this tab. */
+  bulk?: { label: string; field: "date_reviewed" | "date_approved_by_rd"; action: "reviewed" | "approved" };
+};
+
 export type DocumentTrackerViewProps = {
   title?: string;
   eyebrow?: string;
@@ -45,6 +63,7 @@ export type DocumentTrackerViewProps = {
   drafterOptions?: string[];
   statusOptions?: string[];
   queueFilter?: (doc: DocRow) => boolean;
+  queueTabs?: QueueTab[];
   emptyQueueMessage?: string;
   headerExtra?: React.ReactNode;
   renderActions?: (doc: DocRow, refresh: () => void) => React.ReactNode;
@@ -70,6 +89,7 @@ export default function DocumentTrackerView({
   drafterOptions = [],
   statusOptions = ["Drafted", "Pending Review", "Returned", "Sent", "Cancelled"],
   queueFilter,
+  queueTabs,
   emptyQueueMessage = "No documents recorded yet.",
   headerExtra,
   renderActions,
@@ -84,6 +104,12 @@ export default function DocumentTrackerView({
   // where a document actually sits in the approval pipeline right now.
   const [stageFilter, setStageFilter] = useState<PipelineStage | "all">("all");
 
+  // Narrows "Needs attention" down to the worst offenders (15+ days idle).
+  const [criticalOnly, setCriticalOnly] = useState(false);
+
+  // Column sorting (click a table header). null = the default newest-first order.
+  const [sort, setSort] = useState<SortState>(null);
+
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingDoc, setEditingDoc] = useState<DocRow | null>(null);
@@ -94,6 +120,12 @@ export default function DocumentTrackerView({
   const [scannedFromFile, setScannedFromFile] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [highlightId, setHighlightId] = useState<number | null>(null);
+
+  // Queue tabs (ARD/RD) + bulk selection.
+  const [activeTab, setActiveTab] = useState<string>(queueTabs?.[0]?.key ?? "");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const activeTabDef = queueTabs?.find((t) => t.key === activeTab) ?? queueTabs?.[0];
 
   // Default status for new documents: "In process" if it exists in the status list,
   // otherwise the closest open-ended status (never Cancelled / Returned / Sent).
@@ -114,7 +146,11 @@ export default function DocumentTrackerView({
   async function fetchDocuments() {
     setLoading(true);
     const data = await fetchDocumentsFromDb();
-    const list = queueFilter ? data.filter(queueFilter) : data;
+    const list = queueTabs
+      ? data.filter((d) => queueTabs.some((t) => t.filter(d)))
+      : queueFilter
+      ? data.filter(queueFilter)
+      : data;
     setDocuments(list);
     setLoading(false);
     return list;
@@ -281,14 +317,60 @@ export default function DocumentTrackerView({
     }
   }
 
+  const tabDocs = useMemo(
+    () => (activeTabDef ? documents.filter(activeTabDef.filter) : documents),
+    [documents, activeTabDef]
+  );
+
+  const tabViews = useMemo(
+    () =>
+      (queueTabs ?? []).map((t) => ({
+        key: t.key,
+        label: t.label,
+        count: documents.filter(t.filter).length,
+      })),
+    [queueTabs, documents]
+  );
+
+  const queueSummary = useMemo(() => {
+    if (!activeTabDef?.oldestFirst) return null;
+    if (tabDocs.length === 0) return "Nothing waiting — you're all caught up.";
+    const longest = Math.max(...tabDocs.map((d) => daysSinceActivity(d) ?? 0));
+    return (
+      <>
+        <span className="font-semibold text-[#26357F]">{tabDocs.length}</span> waiting
+        {longest >= 1 && (
+          <>
+            {" "}
+            · longest wait{" "}
+            <span className="font-semibold text-[#A6741B]">
+              {longest} day{longest === 1 ? "" : "s"}
+            </span>
+          </>
+        )}
+      </>
+    );
+  }, [activeTabDef, tabDocs]);
+
+  const sectorOpts = useMemo(
+    () =>
+      sectorOptions.length > 0
+        ? sectorOptions
+        : Array.from(
+            new Set(documents.map((d) => d.sector_division).filter((x): x is string => !!x))
+          ).sort(),
+    [sectorOptions, documents]
+  );
+
   const filtered = useMemo(() => {
     const q = filters.search.trim().toLowerCase();
-    return documents.filter((d) => {
+    const matches = tabDocs.filter((d) => {
       if (filters.category !== "All" && d.category !== filters.category) return false;
       if (filters.status !== "All" && d.status?.toLowerCase() !== filters.status.toLowerCase()) return false;
       if (filters.sector !== "All" && d.sector_division !== filters.sector) return false;
       if (filters.drafter !== "All" && d.drafted_by !== filters.drafter) return false;
       if (filters.staleOnly && !isStale(d)) return false;
+      if (criticalOnly && staleSeverity(d) !== "critical") return false;
       if (filters.missingAttachmentOnly && hasAttachment(d)) return false;
       if (stageFilter !== "all" && pipelineStage(d) !== stageFilter) return false;
 
@@ -299,7 +381,53 @@ export default function DocumentTrackerView({
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [documents, filters, stageFilter]);
+
+    // A column the user clicked always wins over any automatic ordering.
+    if (sort) return sortDocuments(matches, sort);
+
+    // Approver queues: longest-waiting first, so the oldest is always on top.
+    if (activeTabDef?.oldestFirst) {
+      return [...matches].sort(
+        (a, b) => (daysSinceActivity(b) ?? 0) - (daysSinceActivity(a) ?? 0)
+      );
+    }
+
+    // When looking at what needs chasing, put the longest-idle documents first
+    // so the most urgent one is always at the top of the list.
+    if (filters.staleOnly || criticalOnly) {
+      return [...matches].sort(
+        (a, b) => (daysSinceActivity(b) ?? 0) - (daysSinceActivity(a) ?? 0)
+      );
+    }
+    return matches;
+  }, [tabDocs, activeTabDef, filters, stageFilter, criticalOnly, sort]);
+
+  // After an approve/return the document leaves the tab; open the next one in
+  // line automatically so the approver can work straight down the queue.
+  // Only reacts to the list of documents changing, not to typing in filters.
+  const visibleIds = filtered.map((d) => d.id);
+  const [nav, setNav] = useState<{ docs: DocRow[]; ids: number[] }>({ docs: [], ids: [] });
+  if (nav.docs !== documents || nav.ids.join(",") !== visibleIds.join(",")) {
+    if (
+      queueTabs &&
+      nav.docs !== documents &&
+      expandedId != null &&
+      visibleIds.length > 0 &&
+      !visibleIds.includes(expandedId)
+    ) {
+      const idx = nav.ids.indexOf(expandedId);
+      setExpandedId(visibleIds[Math.min(Math.max(idx, 0), visibleIds.length - 1)]);
+    }
+    setNav({ docs: documents, ids: visibleIds });
+  }
+
+  useEffect(() => {
+    if (!queueTabs || expandedId == null) return;
+    document
+      .getElementById(`doc-row-${expandedId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scroll only when the open row changes
+  }, [expandedId]);
 
   const stats = useMemo(() => {
     const byStage: Record<PipelineStage, number> = {
@@ -316,8 +444,9 @@ export default function DocumentTrackerView({
       byStage[pipelineStage(d)]++;
     });
     const stale = documents.filter(isStale).length;
+    const critical = documents.filter((d) => staleSeverity(d) === "critical").length;
     const missingAttachment = documents.filter((d) => !hasAttachment(d)).length;
-    return { total: documents.length, stale, missingAttachment, ...byStage };
+    return { total: documents.length, stale, critical, missingAttachment, ...byStage };
   }, [documents]);
 
   const hasActiveFilters =
@@ -328,12 +457,13 @@ export default function DocumentTrackerView({
     filters.drafter !== "All" ||
     filters.staleOnly ||
     filters.missingAttachmentOnly ||
+    criticalOnly ||
     stageFilter !== "all";
 
   // ---- Pagination (done in the browser; the export still includes every filtered row)
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(1);
-  const pageKey = JSON.stringify([filters, stageFilter, pageSize]);
+  const pageKey = JSON.stringify([filters, stageFilter, criticalOnly, sort, pageSize, activeTab]);
   const [prevPageKey, setPrevPageKey] = useState(pageKey);
   if (prevPageKey !== pageKey) {
     // Any filter / page-size change sends you back to page 1.
@@ -344,6 +474,62 @@ export default function DocumentTrackerView({
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * pageSize;
   const pagedDocuments = filtered.slice(pageStart, pageStart + pageSize);
+
+  const selectedCount = filtered.filter((d) => selectedIds.has(d.id)).length;
+
+  function toggleSelect(id: number) {
+    setSelectedIds((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllOnPage() {
+    setSelectedIds((cur) => {
+      const next = new Set(cur);
+      const allOn = pagedDocuments.every((d) => next.has(d.id));
+      pagedDocuments.forEach((d) => (allOn ? next.delete(d.id) : next.add(d.id)));
+      return next;
+    });
+  }
+
+  function changeTab(key: string) {
+    setActiveTab(key);
+    setExpandedId(null);
+    setSelectedIds(new Set());
+  }
+
+  async function runBulk() {
+    const bulk = activeTabDef?.bulk;
+    if (!bulk) return;
+    const targets = filtered.filter((d) => selectedIds.has(d.id));
+    if (targets.length === 0) return;
+    const list = targets.map((d) => `• ${d.document_no}`).join("\n");
+    if (
+      !confirm(
+        `${bulk.label} ${targets.length} document${targets.length === 1 ? "" : "s"}?\n\n${list}`
+      )
+    )
+      return;
+
+    setBulkBusy(true);
+    const failed: string[] = [];
+    for (const d of targets) {
+      const error = await updateDocument(
+        d.id,
+        { [bulk.field]: todayIso() } as Partial<DocRow>,
+        d,
+        bulk.action
+      );
+      if (error) failed.push(d.document_no ?? String(d.id));
+    }
+    setBulkBusy(false);
+    setSelectedIds(new Set());
+    await fetchDocuments();
+    if (failed.length > 0) alert(`Couldn't update: ${failed.join(", ")}`);
+  }
 
   async function handleExport() {
     setExporting(true);
@@ -363,6 +549,7 @@ export default function DocumentTrackerView({
   function resetFilters() {
     setFilters(EMPTY_FILTERS);
     setStageFilter("all");
+    setCriticalOnly(false);
   }
 
   return (
@@ -407,114 +594,40 @@ export default function DocumentTrackerView({
       <div className="max-w-7xl mx-auto px-6 pb-12 font-body">
         {headerExtra}
 
-        {/* --------------------------------------------------------------------- */}
-        {/* Find the block starting "{statsMode === "full" && (" in                */}
-        {/* DocumentTrackerView.tsx and replace the whole thing with this.         */}
-        {/* Only change from before: colorClass added to 6 of the StatItems.       */}
-        {/* --------------------------------------------------------------------- */}
+        {queueTabs && (
+          <QueueTabs
+            tabs={tabViews}
+            active={activeTabDef?.key ?? ""}
+            onChange={changeTab}
+            summary={queueSummary}
+          />
+        )}
 
         {statsMode === "full" && (
-          <div className="flex flex-wrap items-stretch gap-3 mb-8 text-sm">
-            <StatItem
-              label="Total records"
-              value={stats.total}
-              active={stageFilter === "all" && !filters.staleOnly}
-              onClick={() => {
-                setStageFilter("all");
-                setFilters((f) => ({ ...f, staleOnly: false }));
-              }}
-            />
-            <Divider />
-            <StatItem
-              label={PIPELINE_STAGE_LABEL.awaiting_review}
-              value={stats.awaiting_review}
-              colorClass="text-[#4A5FA0]"
-              active={stageFilter === "awaiting_review"}
-              onClick={() => setStageFilter((s) => (s === "awaiting_review" ? "all" : "awaiting_review"))}
-            />
-            <Divider />
-            <StatItem
-              label={PIPELINE_STAGE_LABEL.awaiting_rd_approval}
-              value={stats.awaiting_rd_approval}
-              colorClass="text-[#1C7A6E]"
-              active={stageFilter === "awaiting_rd_approval"}
-              onClick={() =>
-                setStageFilter((s) => (s === "awaiting_rd_approval" ? "all" : "awaiting_rd_approval"))
-              }
-            />
-            <Divider />
-            <StatItem
-              label={PIPELINE_STAGE_LABEL.awaiting_signature}
-              value={stats.awaiting_signature}
-              colorClass="text-[#D4A339]"
-              active={stageFilter === "awaiting_signature"}
-              onClick={() =>
-                setStageFilter((s) => (s === "awaiting_signature" ? "all" : "awaiting_signature"))
-              }
-            />
-            <Divider />
-            <StatItem
-              label={PIPELINE_STAGE_LABEL.awaiting_final_approval}
-              value={stats.awaiting_final_approval}
-              colorClass="text-[#B85C1F]"
-              active={stageFilter === "awaiting_final_approval"}
-              onClick={() =>
-                setStageFilter((s) => (s === "awaiting_final_approval" ? "all" : "awaiting_final_approval"))
-              }
-            />
-            <Divider />
-            <StatItem
-              label={PIPELINE_STAGE_LABEL.ready_to_transmit}
-              value={stats.ready_to_transmit}
-              colorClass="text-[#C2410C]"
-              active={stageFilter === "ready_to_transmit"}
-              onClick={() =>
-                setStageFilter((s) => (s === "ready_to_transmit" ? "all" : "ready_to_transmit"))
-              }
-            />
-            <Divider />
-            <StatItem
-              label={PIPELINE_STAGE_LABEL.transmitted}
-              value={stats.transmitted}
-              tone="sent"
-              active={stageFilter === "transmitted"}
-              onClick={() => setStageFilter((s) => (s === "transmitted" ? "all" : "transmitted"))}
-            />
-            <Divider />
-            <StatItem
-              label={PIPELINE_STAGE_LABEL.returned}
-              value={stats.returned}
-              tone="cancelled"
-              active={stageFilter === "returned"}
-              onClick={() => setStageFilter((s) => (s === "returned" ? "all" : "returned"))}
-            />
-            <Divider />
-            <StatItem
-              label={PIPELINE_STAGE_LABEL.cancelled}
-              value={stats.cancelled}
-              tone="cancelled"
-              active={stageFilter === "cancelled"}
-              onClick={() => setStageFilter((s) => (s === "cancelled" ? "all" : "cancelled"))}
-            />
-            <Divider />
-            <StatItem
-              label="Needs attention"
-              value={stats.stale}
-              tone="warning"
-              active={filters.staleOnly}
-              onClick={() => setFilters((f) => ({ ...f, staleOnly: !f.staleOnly }))}
-            />
-            <Divider />
-            <StatItem
-              label="Missing attachment"
-              value={stats.missingAttachment}
-              colorClass="text-[#5B4B8A]"
-              active={filters.missingAttachmentOnly}
-              onClick={() =>
-                setFilters((f) => ({ ...f, missingAttachmentOnly: !f.missingAttachmentOnly }))
-              }
-            />
-          </div>
+          <StatGroups
+            stats={stats}
+            stageFilter={stageFilter}
+            onStage={(st) => setStageFilter((cur) => (cur === st ? "all" : st))}
+            allActive={
+              stageFilter === "all" &&
+              !filters.staleOnly &&
+              !criticalOnly &&
+              !filters.missingAttachmentOnly
+            }
+            onAll={() => {
+              setStageFilter("all");
+              setCriticalOnly(false);
+              setFilters((f) => ({ ...f, staleOnly: false, missingAttachmentOnly: false }));
+            }}
+            staleOnly={filters.staleOnly}
+            onStale={() => setFilters((f) => ({ ...f, staleOnly: !f.staleOnly }))}
+            criticalOnly={criticalOnly}
+            onCritical={() => setCriticalOnly((c) => !c)}
+            missingOnly={filters.missingAttachmentOnly}
+            onMissing={() =>
+              setFilters((f) => ({ ...f, missingAttachmentOnly: !f.missingAttachmentOnly }))
+            }
+          />
         )}
 
         <TrackerToolbar
@@ -522,11 +635,32 @@ export default function DocumentTrackerView({
           onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
           categoryOptions={categoryOptions}
           statusOptions={statusOptions}
-          sectorOptions={sectorOptions}
+          sectorOptions={sectorOpts}
           drafterOptions={drafterOptions}
           hasActiveFilters={hasActiveFilters}
           onReset={resetFilters}
         />
+
+        {activeTabDef?.bulk && selectedCount > 0 && (
+          <div className="sticky top-3 z-20 mb-3 flex items-center justify-between gap-3 bg-[#0C2D5C] text-white rounded-xl shadow-lg px-4 py-3">
+            <span className="text-sm font-medium">{selectedCount} selected</span>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-sm text-white/80 hover:text-white"
+              >
+                Clear
+              </button>
+              <button
+                onClick={runBulk}
+                disabled={bulkBusy}
+                className="bg-[#FFB400] text-[#0C2D5C] text-sm font-bold py-1.5 px-4 rounded-full hover:bg-[#FFC933] disabled:opacity-60 transition-colors"
+              >
+                {bulkBusy ? "Saving…" : `${activeTabDef.bulk.label} (${selectedCount})`}
+              </button>
+            </div>
+          </div>
+        )}
 
         {allowManage && (
           <div className="flex items-center justify-between mb-3">
@@ -563,7 +697,7 @@ export default function DocumentTrackerView({
           highlightId={highlightId}
           expandedId={expandedId}
           setExpandedId={setExpandedId}
-          emptyMessage={emptyQueueMessage}
+          emptyMessage={activeTabDef?.emptyMessage ?? emptyQueueMessage}
           hasActiveFilters={hasActiveFilters}
           onResetFilters={resetFilters}
           allowManage={allowManage}
@@ -571,6 +705,11 @@ export default function DocumentTrackerView({
           onEditDetails={handleOpenEditModal}
           onArchive={handleArchive}
           onRefresh={fetchDocuments}
+          sort={sort}
+          onSort={(key: SortKey) => setSort((cur) => nextSort(cur, key))}
+          selectedIds={activeTabDef?.bulk ? selectedIds : undefined}
+          onToggleSelect={activeTabDef?.bulk ? toggleSelect : undefined}
+          onToggleAll={activeTabDef?.bulk ? toggleSelectAllOnPage : undefined}
         />
         </div>
 

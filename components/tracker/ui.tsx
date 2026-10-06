@@ -3,10 +3,53 @@
 import React from "react";
 import { StatusTone } from "../../lib/documentTracker";
 
-export function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function SortIcon({ dir }: { dir: "asc" | "desc" | null }) {
   return (
-    <th className={`px-4 py-3.5 font-semibold text-[#0C2D5C] text-[11px] uppercase tracking-wider ${className}`}>
-      {children}
+    <svg width="9" height="12" viewBox="0 0 9 12" aria-hidden="true" className="shrink-0">
+      <path d="M4.5 0L9 5H0z" fill={dir === "asc" ? "#FFB400" : "currentColor"} opacity={dir === "asc" ? 1 : 0.35} />
+      <path d="M4.5 12L0 7h9z" fill={dir === "desc" ? "#FFB400" : "currentColor"} opacity={dir === "desc" ? 1 : 0.35} />
+    </svg>
+  );
+}
+
+export function Th({
+  children,
+  className = "",
+  sortDir,
+  onSort,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  /** Current sort direction of this column, or null when it isn't the sorted one. */
+  sortDir?: "asc" | "desc" | null;
+  /** When provided, the header becomes a sort button. */
+  onSort?: () => void;
+}) {
+  const ariaSort = onSort
+    ? sortDir === "asc"
+      ? "ascending"
+      : sortDir === "desc"
+      ? "descending"
+      : "none"
+    : undefined;
+
+  return (
+    <th
+      aria-sort={ariaSort}
+      className={`px-3 py-4 font-semibold text-white text-xs uppercase tracking-[0.08em] whitespace-nowrap ${className}`}
+    >
+      {onSort ? (
+        <button
+          type="button"
+          onClick={onSort}
+          className="inline-flex items-center gap-1.5 uppercase tracking-[0.08em] font-semibold rounded hover:text-[#FFB400] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#FFB400] transition-colors"
+        >
+          {children}
+          <SortIcon dir={sortDir ?? null} />
+        </button>
+      ) : (
+        children
+      )}
     </th>
   );
 }
@@ -21,7 +64,7 @@ export function Td({
   title?: string;
 }) {
   return (
-    <td className={`px-4 py-3.5 ${className}`} title={title}>
+    <td className={`px-3 py-3.5 ${className}`} title={title}>
       {children}
     </td>
   );
